@@ -1,3 +1,21 @@
+# setup and uninstall
+```
+pip install -e .
+```
+or
+```
+python setup.py develop
+```
+
+uninstall:
+```
+pip uninstall aegnn
+```
+
+# changes wrt original AEGNN
+aegnn-async-conv.py-149: original cannot run
+aegnn-datasets-ncaltech101.py-181: original cannot run
+
 # AEGNN: Asynchronous Event-based Graph Neural Networks
 <p align="center">
   <a href="https://youtu.be/opbFE6OsAeA">
