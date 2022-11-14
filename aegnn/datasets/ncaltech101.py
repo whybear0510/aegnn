@@ -178,4 +178,5 @@ class NCaltech101(EventDataModule):
 
     @property
     def classes(self) -> List[str]:
-        return os.listdir(os.path.join(self.root, "raw"))
+        # return os.listdir(os.path.join(self.root, "raw"))
+        return os.listdir(os.path.join(self.root, "annotations"))
