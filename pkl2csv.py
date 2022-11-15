@@ -25,7 +25,7 @@ with open("../aegnn_results/flops.pkl", "rb") as f:
     object = pkl.load(f)
     
 df = pd.DataFrame(object)
-df.to_csv(r'flops.csv')
+df.to_csv(r'../aegnn_results/flops.csv')
 
 ls = df.values.tolist()
 
