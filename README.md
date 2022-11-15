@@ -45,6 +45,18 @@ requirements with:
 conda env create --file=environment.yml
 ```
 
+From tlwzzy_aegnn:
+
+For our implementation the CUDA version 10.2 is used. Install the project
+requirements with:
+```
+conda create -n aegnn python=3.8
+conda activate aegnn
+pip3 install torch==1.9.1
+pip3 install torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-1.9.1+cu102.html
+pip3 install -r aegnn/requirements.txt
+```
+
 ## Processing Pipeline
 We evaluated our approach on three datasets. [NCars](http://www.prophesee.ai/dataset-n-cars/), 
 [NCaltech101](https://www.garrickorchard.com/datasets/n-caltech101) and 
@@ -56,6 +68,19 @@ the `AEGNN_DATA_DIR` environment variable.
 To efficiently train the graph neural networks, the event graph is generated offline during pre-processing. For 
 specific instructions about the data structure and data pre-processing, please refer to the 
 [dataset's readme](aegnn/datasets/README.md).
+
+### Training - from tlwzzy_aegnn
+We use the [PyTorch Lightning](https://www.pytorchlightning.ai/) for training and [WandB](https://wandb.ai/) for
+logging. By default, the logs are stored in `/data/logs/`, this can be changed by setting the `AEGNN_LOG_DIR` 
+environment variable. To run our training pipeline:
+```
+python3 aegnn/scripts/train.py graph_res --task recognition --dataset dataset --gpu X --batch-size X --dim 3
+```
+with tasks `recognition` or `detection`. A list of configuration arguments can be found by calling the `--help` flag. 
+To evaluate the detection pipeline, compute the mAP score on the whole test dataset by running: 
+```
+python3 aegnn/evaluation/map_search.py model --dataset dataset --device X
+```
 
 ## Asynchronous & Sparse Pipeline
 The code allows to make **any graph-based convolutional model** asynchronous & sparse, with a simple command and without 
