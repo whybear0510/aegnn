@@ -15,6 +15,8 @@ except ModuleNotFoundError:
 aegnn.utils.io.setup_environment({
     # "AEGNN_DATA_DIR": "/data/storage/",
     # "AEGNN_LOG_DIR": "/data/scratch/"
-    "AEGNN_DATA_DIR": "/home/yyf/Documents/Thesis/datasets/data/storage/",
-    "AEGNN_LOG_DIR": "/home/yyf/Documents/Thesis/datasets/data/scratch/"
+    # "AEGNN_DATA_DIR": "/home/yyf/Documents/Thesis/datasets/data/storage/",
+    # "AEGNN_LOG_DIR": "/home/yyf/Documents/Thesis/datasets/data/scratch/"
+    "AEGNN_DATA_DIR": "/space/yyang22/datasets/data/storage/",
+    "AEGNN_LOG_DIR": "/space/yyang22/datasets/data/scratch/"
 })
