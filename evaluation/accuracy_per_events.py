@@ -18,6 +18,11 @@ def parse_args():
     parser.add_argument("model_file", help="Path of model to evaluate.")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--debug", action="store_true")
+    # copy from flops.py
+    parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
+    parser.add_argument("--max-num-neighbors", default=32, help="max. number of neighbors in graph")
+    parser.add_argument("--pooling-size", default=(10, 10))
+
     parser = aegnn.datasets.EventDataModule.add_argparse_args(parser)
     return parser.parse_args()
 
@@ -43,6 +48,8 @@ def sample_batch(batch_idx: torch.Tensor, num_samples: int) -> Tuple[torch.LongT
 
 def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
     accuracy = []
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
 
     for i, batch in enumerate(data_loader):
         batch_idx = getattr(batch, 'batch')
@@ -55,8 +62,16 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
                        edge_index=edge_index, edge_attr=edge_attr, batch=subset_batch_idx)
         logging.debug(f"Done data-processing, resulting in {sample}")
 
-        sample = sample.to(model.device)
-        outputs_i = model.forward(sample)
+        # copy from flops.py
+        input_shape = torch.tensor([*dm.dims, sample.pos.shape[-1]], device=device)
+        model_ = aegnn.models.networks.GraphRes(dm.name, input_shape, dm.num_classes, pooling_size=args.pooling_size)
+        model_.to(device)
+        # model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, list(dm.dims), edge_attr, **kwargs)
+
+        # original
+        # sample = sample.to(model.device)
+
+        outputs_i = model_.forward(sample)
         y_hat_i = torch.argmax(outputs_i, dim=-1)
 
         accuracy_i = pl_metrics.accuracy(preds=y_hat_i, target=sample.y).cpu().numpy()
@@ -89,8 +104,9 @@ if __name__ == '__main__':
     if args.debug:
         _ = aegnn.utils.loggers.LoggingLogger(None, name="debug")
 
-    model_eval = torch.load(args.model_file).to(args.device)
+    # model_eval = torch.load(args.model_file).to(args.device)
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
+    model_eval = None
 
     main(args, model_eval, dm)

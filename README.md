@@ -14,7 +14,10 @@ pip uninstall aegnn
 
 # changes wrt original AEGNN
 aegnn-async-conv.py-149: original cannot run
+
 aegnn-datasets-ncaltech101.py-181: original cannot run
+
+aegnn-models-networks-graph_res.py-52: avoid warning
 
 # AEGNN: Asynchronous Event-based Graph Neural Networks
 <p align="center">
