@@ -43,9 +43,10 @@ def create_and_run_model(dm, num_events: int, index: int, device: torch.device, 
 
     # Sample initial data of certain length from dataset sample. Sample num_events samples from one
     # dataset, and create the subsequent event as the one to be added.
-    sample = dataset[index % len(dataset)]
+    sample = dataset[index % len(dataset)] # len(dataset) = 12961
     sample.pos = sample.pos[:, :2]
     events_initial = sample_initial_data(sample, num_events, args.radius, edge_attr, args.max_num_neighbors)
+    # max num_nodes in Ncars dataset is 10000, min is 500
 
     index_new = min(num_events, sample.num_nodes - 1)
     x_new = sample.x[index_new, :].view(1, -1)
@@ -100,6 +101,7 @@ def run_experiments(dm, args, experiments: List[int], num_trials: int, device: t
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     runs = list(itertools.product(experiments, list(range(num_trials))))
+    #[(25000,0),(25000,1),...,(25000,99)]
     for num_events, exp_id in tqdm(runs):
         model = create_and_run_model(dm, num_events, index=exp_id, args=args, device=device, **model_kwargs)
 
@@ -126,5 +128,5 @@ if __name__ == '__main__':
     data_module.setup()
     event_counts = [25000]
     # event_counts = list(np.linspace(1000, 15000, num=10).astype(int))
-    run_experiments(data_module, arguments, experiments=event_counts, num_trials=100,
+    run_experiments(data_module, arguments, experiments=event_counts, num_trials=4000,
                     device=torch.device(arguments.device), log_flops=True, log_runtime=True)
