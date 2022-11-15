@@ -32,6 +32,7 @@ def __compute_flops_node(module, num_neighs: int) -> int:
         np = module.weight.size()[0]
         d = module.degree
         return ni * m_out * m_in * (1 + np) + ni * (2 * d + 2 * nm * d - 1)
+        # return ni * m_out * m_in * (1 + 2*np) + ni * (2 * d + 2 * nm * d - 1)
     else:
         module_type = type(module).__name__
         raise NotImplementedError(f"FLOPS computation not implemented for module type {module_type}")
