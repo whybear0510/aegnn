@@ -33,6 +33,10 @@ def parse_args():
 
 
 def main(args):
+
+    # check data using wandb
+    wandb.init(project="aegnn", entity="yyfteam")
+
     log_settings = wandb.Settings(start_method="thread")
     log_dir = os.environ["AEGNN_LOG_DIR"]
     loggers = [aegnn.utils.loggers.LoggingLogger(None if args.debug else log_dir, name="debug")]
