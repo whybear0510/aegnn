@@ -11,7 +11,7 @@ from .networks import by_name as model_by_name
 class RecognitionModel(pl.LightningModule):
 
     def __init__(self, network, dataset: str, num_classes, img_shape: Tuple[int, int],
-                 dim: int = 3, learning_rate: float = 5e-3, **model_kwargs):
+                 dim: int = 3, learning_rate: float = 1e-3, **model_kwargs):
         super(RecognitionModel, self).__init__()
         self.optimizer_kwargs = dict(lr=learning_rate)
         self.criterion = torch.nn.CrossEntropyLoss()
@@ -58,6 +58,8 @@ class RecognitionModel(pl.LightningModule):
 class LRPolicy(object):
     def __call__(self, epoch: int):
         if epoch < 20:
-            return 5e-3
+            # return 5e-3
+            return 1e-3
         else:
-            return 5e-4
+            # return 5e-4
+            return 1e-4
