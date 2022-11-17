@@ -3,7 +3,7 @@ import datetime
 import os
 import pytorch_lightning as pl
 import pytorch_lightning.loggers
-import wandb
+# import wandb
 
 import aegnn
 
@@ -25,7 +25,7 @@ def parse_args():
 
     parser.add_argument("--log-gradients", action="store_true")
     parser.add_argument("--profile", action="store_true")
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--debug", action="store_true") # == default is false
     parser.add_argument("--gpu", default=None, type=int)
 
     parser = aegnn.datasets.EventDataModule.add_argparse_args(parser)
@@ -35,9 +35,9 @@ def parse_args():
 def main(args):
 
     # check data using wandb
-    wandb.init(project="aegnn", entity="yyfteam")
+    # wandb.init(project="aegnn", entity="yyfteam")
+    # log_settings = wandb.Settings(start_method="thread")
 
-    log_settings = wandb.Settings(start_method="thread")
     log_dir = os.environ["AEGNN_LOG_DIR"]
     loggers = [aegnn.utils.loggers.LoggingLogger(None if args.debug else log_dir, name="debug")]
     project = f"aegnn-{args.dataset}-{args.task}"
@@ -49,10 +49,14 @@ def main(args):
                                             img_shape=dm.dims, dim=args.dim, bias=True, root_weight=True)
 
     if not args.debug:
-        wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir, settings=log_settings)
-        if args.log_gradients:
-            wandb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
-        loggers.append(wandb_logger)
+        # wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir, settings=log_settings)
+        # if args.log_gradients:
+        #     wandb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
+        # loggers.append(wandb_logger)
+        tb_logger = pl.loggers.TensorBoardLogger(log_dir, name=project)
+        # if args.log_gradients:
+        #     tb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
+        loggers.append(tb_logger)
     logger = pl.loggers.LoggerCollection(loggers)
 
     checkpoint_path = os.path.join(log_dir, "checkpoints", args.dataset, args.task, experiment_name)

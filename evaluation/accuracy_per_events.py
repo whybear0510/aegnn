@@ -63,15 +63,15 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
         logging.debug(f"Done data-processing, resulting in {sample}")
 
         # copy from flops.py
-        input_shape = torch.tensor([*dm.dims, sample.pos.shape[-1]], device=device)
-        model_ = aegnn.models.networks.GraphRes(dm.name, input_shape, dm.num_classes, pooling_size=args.pooling_size)
-        model_.to(device)
+        # input_shape = torch.tensor([*dm.dims, sample.pos.shape[-1]], device=device)
+        # model_ = aegnn.models.networks.GraphRes(dm.name, input_shape, dm.num_classes, pooling_size=args.pooling_size)
+        # model_.to(device)
         # model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, list(dm.dims), edge_attr, **kwargs)
 
         # original
-        # sample = sample.to(model.device)
+        sample = sample.to(model.device)
 
-        outputs_i = model_.forward(sample)
+        outputs_i = model.forward(sample)
         y_hat_i = torch.argmax(outputs_i, dim=-1)
 
         accuracy_i = pl_metrics.accuracy(preds=y_hat_i, target=sample.y).cpu().numpy()
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     if args.debug:
         _ = aegnn.utils.loggers.LoggingLogger(None, name="debug")
 
-    # model_eval = torch.load(args.model_file).to(args.device)
+    model_eval = torch.load(args.model_file).to(args.device)
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
-    model_eval = None
+    # model_eval = None
 
     main(args, model_eval, dm)
