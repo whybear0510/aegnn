@@ -59,7 +59,7 @@ class LRPolicy(object):
     def __call__(self, epoch: int):
         if epoch < 20:
             # return 5e-3
-            return 1e-3
+            return 1
         else:
             # return 5e-4
-            return 1e-4
+            return 0.1

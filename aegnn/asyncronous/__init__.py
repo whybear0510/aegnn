@@ -17,7 +17,7 @@ from aegnn.asyncronous.base.callbacks import CallbackFactory
 
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None,
-                            log_flops: bool = False, log_runtime: bool = False):
+                            log_flops: bool = False, log_runtime: bool = False, **module_kwargs):
     """Module converter from synchronous to asynchronous & sparse processing for graph convolutional layers.
     By overwriting parts of the module asynchronous processing can be enabled without the need of re-learning
     and moving its weights and configuration. So, a convolutional layer can be converted by, for example:
@@ -96,7 +96,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             logging.debug(f"Model's modules took overall {sum(runtimes)}s")
         return out
 
-    module.forward = async_forward
+    # module.forward = async_forward  #20221119
     return module
 
 
