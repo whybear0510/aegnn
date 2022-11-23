@@ -11,9 +11,9 @@ from .networks import by_name as model_by_name
 class RecognitionModel(pl.LightningModule):
 
     def __init__(self, network, dataset: str, num_classes, img_shape: Tuple[int, int],
-                 dim: int = 3, learning_rate: float = 1e-3, **model_kwargs):
+                 dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, **model_kwargs):
         super(RecognitionModel, self).__init__()
-        self.optimizer_kwargs = dict(lr=learning_rate)
+        self.optimizer_kwargs = dict(lr=learning_rate, weight_decay=weight_decay)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.num_outputs = num_classes
         self.dim = dim
@@ -50,7 +50,7 @@ class RecognitionModel(pl.LightningModule):
         return predictions
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), weight_decay=5e-3, **self.optimizer_kwargs)
+        optimizer = torch.optim.Adam(self.parameters(),  **self.optimizer_kwargs)
         lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
         return [optimizer], [lr_scheduler]
 
@@ -60,6 +60,8 @@ class LRPolicy(object):
         if epoch < 20:
             # return 5e-3
             return 1
-        else:
+        elif epoch >= 20 and epoch < 50:
             # return 5e-4
             return 0.1
+        else:
+            return 0.05

@@ -25,11 +25,13 @@ def parse_args():
     group.add_argument("--limit_train_batches", default=1.0, type=int)
     group.add_argument("--limit_val_batches", default=1.0, type=int)
     
-    parser.add_argument("--init_lr", default=0.001, type=float)
     parser.add_argument("--log-gradients", action="store_true")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--debug", action="store_true") # == default is false
     parser.add_argument("--gpu", default=None, type=int)
+
+    parser.add_argument("--init-lr", default=0.001, type=float)
+    parser.add_argument("--weight-decay", default=0.005, type=float)
 
     #copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
@@ -55,7 +57,7 @@ def main(args):
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
     model = aegnn.models.by_task(args.task)(args.model, args.dataset, num_classes=dm.num_classes,
-                                            img_shape=dm.dims, dim=args.dim, learning_rate=args.init_lr, bias=True, root_weight=True)
+                                            img_shape=dm.dims, dim=args.dim, learning_rate=args.init_lr, weight_decay = args.weight_decay, bias=True, root_weight=True)
     
     # training the async model (?), copy from flop.py
     # edge_attr = torch_geometric.transforms.Cartesian(cat=False, max_value=10.0)

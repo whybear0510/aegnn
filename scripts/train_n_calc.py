@@ -20,20 +20,21 @@ def cat_cmd(*cmd_list, mode='pipe'):
 
 
 
-model = 'graph_res'
+model = 'graph_res' # try graph_wen?
 task = 'recognition'
 dataset = 'ncars'
-No_of_gpu = 5
+which_gpu = 5
 dim = 3
 device = 'cuda'
 
-max_epochs = 30
+max_epochs = 100
 batch_size = 64
 init_lr = 0.001
+w_decay = 0.005
 
 
 
-cmd_train = f'python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --gpu {No_of_gpu} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init_lr {init_lr}'
+cmd_train = f'python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --gpu {which_gpu} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init-lr {init_lr} --weight-decay {w_decay}'
 cmd_cpresult = f'python get_latest_results.py'
 cmd_accuracy = f'python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device {device} --dataset {dataset}'
 cmd_csv = f'python pkl2csv.py'
