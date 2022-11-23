@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument("model_file", help="Path of model to evaluate.")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--fast-test", action="store_true")
     # copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
     parser.add_argument("--max-num-neighbors", default=32, help="max. number of neighbors in graph")
@@ -80,7 +81,10 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
 
 
 def main(args, model, data_module):
-    max_num_events = np.arange(1000, 10000, step=200)
+    if args.fast_test:
+        max_num_events = [1000, 2000, 2500, 4000, 5000, 8000, 10000]
+    else:
+        max_num_events = np.arange(1000, 10000, step=200)
     df = pd.DataFrame()
 
     output_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "aegnn_results")
@@ -89,6 +93,7 @@ def main(args, model, data_module):
 
     for max_count in tqdm(max_num_events):
         data_loader = data_module.val_dataloader(num_workers=16).__iter__()
+        # data_loader = data_module.test_dataloader(num_workers=16).__iter__()
         accuracy = evaluate(model, data_loader, max_num_events=max_count)
         logging.debug(f"Evaluation with max_num_events = {max_count} => Recognition accuracy = {accuracy}")
 
