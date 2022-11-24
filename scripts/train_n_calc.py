@@ -28,9 +28,10 @@ dim = 3
 device = 'cuda'
 
 max_epochs = 100
-batch_size = 64
+batch_size = 128
 init_lr = 0.001
-w_decay = 0.005
+w_decay = 0.00
+act = 'relu'
 
 # sweep_config = {
 #     'method': 'random',
@@ -45,8 +46,8 @@ w_decay = 0.005
 #      }
 # }
 
-# eg: CUDA_VISIBLE_DEVICES=5 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --gpu 5 --batch-size 64 --dim 3 --max-epochs 2 --init-lr 0.001 --weight-decay 0.005
-cmd_train = f'CUDA_VISIBLE_DEVICES={which_gpu} python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init-lr {init_lr} --weight-decay {w_decay}'
+# eg: CUDA_VISIBLE_DEVICES=5 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.005 --act relu
+cmd_train = f'CUDA_VISIBLE_DEVICES={which_gpu} python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init-lr {init_lr} --weight-decay {w_decay} --act {act}'
 cmd_cpresult = f'python get_latest_results.py'
 # eg: python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device cuda --dataset ncars
 cmd_accuracy = f'python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device {device} --dataset {dataset}'
@@ -54,4 +55,5 @@ cmd_csv = f'python pkl2csv.py'
 
 cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy, cmd_csv)
 os.system(cmd)
+# os.system(cmd_train)
 
