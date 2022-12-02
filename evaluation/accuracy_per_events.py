@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
-import pytorch_lightning.metrics.functional as pl_metrics
+import torchmetrics.functional as pl_metrics
 
 from torch_geometric.data import Batch
 from torch_geometric.utils import subgraph
@@ -52,7 +52,7 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = torch.device('cpu')
 
-    for i, batch in enumerate(data_loader):
+    for i, batch in enumerate(tqdm(data_loader, position=1)):
         batch_idx = getattr(batch, 'batch')
         subset, subset_batch_idx = sample_batch(batch_idx, num_samples=max_num_events)
         is_in_subset = torch.zeros(batch_idx.numel(), dtype=torch.bool)
@@ -71,7 +71,6 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
 
         # original
         sample = sample.to(model.device)
-
         outputs_i = model.forward(sample)
         y_hat_i = torch.argmax(outputs_i, dim=-1)
 
@@ -82,16 +81,17 @@ def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
 
 def main(args, model, data_module):
     if args.fast_test:
-        max_num_events = [1000, 2000, 2500, 4000, 5000, 8000, 10000]
+        max_num_events = [25000]
+        # max_num_events = [1000, 2000, 2500, 4000, 5000, 8000, 10000]
     else:
-        max_num_events = np.arange(1000, 10000, step=200)
+        max_num_events = np.arange(1000, 15000, step=1000)
     df = pd.DataFrame()
 
     output_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "aegnn_results")
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "accuracy_per_events.pkl")
 
-    for max_count in tqdm(max_num_events):
+    for max_count in tqdm(max_num_events, position=0):
         data_loader = data_module.val_dataloader(num_workers=16).__iter__()
         # data_loader = data_module.test_dataloader(num_workers=16).__iter__()
         accuracy = evaluate(model, data_loader, max_num_events=max_count)
