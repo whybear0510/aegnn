@@ -44,7 +44,7 @@ class NCars(NCaltech101):
         data.pos[:, 2] = normalize_time(data.pos[:, 2])
 
         # Coarsen graph by uniformly sampling n points from the event point cloud.
-        data = self.sub_sampling(data, n_samples=params["n_samples"], sub_sample=params["sampling"])
+        # data = self.sub_sampling(data, n_samples=params["n_samples"], sub_sample=params["sampling"])
 
         # Radius graph generation.
         data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])

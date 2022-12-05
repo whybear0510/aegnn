@@ -96,7 +96,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             logging.debug(f"Model's modules took overall {sum(runtimes)}s")
         return out
 
-    # module.forward = async_forward  #20221119
+    module.forward = async_forward
     return module
 
 
