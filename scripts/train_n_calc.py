@@ -37,7 +37,7 @@ act = 'relu'
 #     'method': 'random',
 #     'name': 'sweep',
 #     'metric': {'goal': 'maximize', 'name': "Val/Accuracy"},
-#     'parameters': 
+#     'parameters':
 #     {
 #         'max_epochs': {'values': [30,50,100]},
 #         'learning_rate': {'max': 0.01, 'min': 0.0005},
@@ -51,9 +51,9 @@ cmd_train = f'CUDA_VISIBLE_DEVICES={which_gpu} python3 ../scripts/train.py {mode
 cmd_cpresult = f'python get_latest_results.py'
 # eg: CUDA_VISIBLE_DEVICES=3 python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device cuda --dataset ncars --batch-size 64 && python pkl2csv.py
 cmd_accuracy = f'CUDA_VISIBLE_DEVICES={which_gpu} python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device {device} --dataset {dataset} --batch-size {batch_size}'
-cmd_csv = f'python pkl2csv.py'
 
-cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy, cmd_csv)
+
+cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy)
 os.system(cmd)
 # os.system(cmd_train)
 
