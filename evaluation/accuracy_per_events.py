@@ -16,7 +16,7 @@ from typing import Iterable, Tuple
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("model_file", help="Path of model to evaluate.")
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--fast-test", action="store_true")
     # copy from flops.py
@@ -49,10 +49,8 @@ def sample_batch(batch_idx: torch.Tensor, num_samples: int) -> Tuple[torch.LongT
 
 def evaluate(model, data_loader: Iterable[Batch], max_num_events: int) -> float:
     accuracy = []
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
 
-    for i, batch in enumerate(tqdm(data_loader, position=1)):
+    for i, batch in enumerate(tqdm(data_loader, position=0)):
         batch_idx = getattr(batch, 'batch')
         subset, subset_batch_idx = sample_batch(batch_idx, num_samples=max_num_events)
         is_in_subset = torch.zeros(batch_idx.numel(), dtype=torch.bool)
@@ -89,18 +87,19 @@ def main(args, model, data_module):
 
     output_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "aegnn_results")
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "accuracy_per_events.pkl")
+    output_file = os.path.join(output_dir, "accuracy_per_events")
 
-    for max_count in tqdm(max_num_events, position=0):
+    for max_count in tqdm(max_num_events, position=1):
         data_loader = data_module.val_dataloader(num_workers=16).__iter__()
         # data_loader = data_module.test_dataloader(num_workers=16).__iter__()
         accuracy = evaluate(model, data_loader, max_num_events=max_count)
         logging.debug(f"Evaluation with max_num_events = {max_count} => Recognition accuracy = {accuracy}")
 
-        df = df.append({"accuracy": accuracy, "max_num_events": max_count}, ignore_index=True)
-        df.to_pickle(output_file)
+        df = pd.concat([df, pd.DataFrame({"accuracy": accuracy, "max_num_events": max_count}, index=[0])], ignore_index=True)
+        df.to_pickle(output_file+'.pkl')
+        df.to_csv(output_file+'.csv')
 
-    print(f"Results are logged in {output_file}")
+    print(f"Results are logged in {output_file}.*")
     return df
 
 
@@ -112,6 +111,5 @@ if __name__ == '__main__':
     model_eval = torch.load(args.model_file).to(args.device)
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
-    # model_eval = None
 
     main(args, model_eval, dm)
