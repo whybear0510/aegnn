@@ -20,6 +20,10 @@ class GraphRes(torch.nn.Module):
         assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
         dim = int(input_shape[-1])
 
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+        self.pooling_size = torch.tensor(pooling_size, device=device)
+        self.input_shape = input_shape.to(device)
+
         if act == 'relu':
             self.act = relu
         elif act == 'elu':
@@ -51,7 +55,7 @@ class GraphRes(torch.nn.Module):
 
         self.conv5 = GCNConv(n[4], n[5])
         self.norm5 = BatchNorm(in_channels=n[5])
-        self.pool5 = MaxPooling(pooling_size, transform=Cartesian(norm=True, cat=False))
+        self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False), img_shape=self.input_shape[:2])
 
         self.conv6 = GCNConv(n[5], n[6])
         self.norm6 = BatchNorm(in_channels=n[6])
@@ -60,14 +64,13 @@ class GraphRes(torch.nn.Module):
 
         grid_div = 4  # =1: global_max_pool_x, >1: grid_max_pool_x
         num_grids = grid_div*grid_div
-        pooling_dm_dims = torch.div(input_shape[:2], grid_div, rounding_mode='floor')
-        self.pool7 = MaxPoolingX(pooling_dm_dims, size=num_grids)
+        pooling_dm_dims = torch.div(self.input_shape[:2], grid_div, rounding_mode='floor')
+        self.pool7 = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
         self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=bias)
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
 
         data.x = self.norm1(self.conv1(data.x, data.edge_index))
-        # debug = data.x.detach().cpu().numpy()
         data.x = self.act(data.x)
         data.x = self.norm2(self.conv2(data.x, data.edge_index))
         data.x = self.act(data.x)
