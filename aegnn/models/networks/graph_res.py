@@ -15,7 +15,7 @@ from aegnn.models.layer import MaxPooling, MaxPoolingX
 class GraphRes(torch.nn.Module):
 
     def __init__(self, dataset, input_shape: torch.Tensor, num_outputs: int, pooling_size=(16, 12),
-                 bias: bool = False, root_weight: bool = False, act: str = 'elu', grid_div: int = 4):
+                 bias: bool = False, root_weight: bool = False, act: str = 'elu', grid_div: int = 4, conv_type: str = 'spline'):
         super(GraphRes, self).__init__()
         assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
         dim = int(input_shape[-1])
@@ -43,12 +43,10 @@ class GraphRes(torch.nn.Module):
         else:
             raise NotImplementedError(f"No model parameters for dataset {dataset}")
 
-        self.type = 'GCNConv'
-        # self.type = 'LEConv'
-        # self.type = 'PointNetConv'
-        # self.type = 'SplineConv'
 
-        if self.type == 'SplineConv':
+        self.type = conv_type
+
+        if self.type == 'spline':
             self.conv1 = SplineConv(n[0], n[1], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
             self.conv2 = SplineConv(n[1], n[2], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
             self.conv3 = SplineConv(n[2], n[3], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
@@ -56,7 +54,7 @@ class GraphRes(torch.nn.Module):
             self.conv5 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
             self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
             self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
-        elif self.type == 'GCNConv':
+        elif self.type == 'gcn':
             self.conv1 = GCNConv(n[0], n[1])
             self.conv2 = GCNConv(n[1], n[2])
             self.conv3 = GCNConv(n[2], n[3])
@@ -64,7 +62,7 @@ class GraphRes(torch.nn.Module):
             self.conv5 = GCNConv(n[4], n[5])
             self.conv6 = GCNConv(n[5], n[6])
             self.conv7 = GCNConv(n[6], n[7])
-        elif self.type == 'LEConv':
+        elif self.type == 'le':
             self.conv1 = LEConv(n[0], n[1])
             self.conv2 = LEConv(n[1], n[2])
             self.conv3 = LEConv(n[2], n[3])
@@ -72,7 +70,7 @@ class GraphRes(torch.nn.Module):
             self.conv5 = LEConv(n[4], n[5])
             self.conv6 = LEConv(n[5], n[6])
             self.conv7 = LEConv(n[6], n[7])
-        elif self.type == 'PointNetConv':
+        elif self.type == 'pointnet':
             self.conv1 = PointNetConv(local_nn=Linear(n[0]+3, n[1]), global_nn=Linear(n[1], n[1]))
             self.conv2 = PointNetConv(local_nn=Linear(n[1]+3, n[2]), global_nn=Linear(n[2], n[2]))
             self.conv3 = PointNetConv(local_nn=Linear(n[2]+3, n[3]), global_nn=Linear(n[3], n[3]))
@@ -101,15 +99,15 @@ class GraphRes(torch.nn.Module):
         self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=bias)
 
     def convs(self, layer, data):
-        if self.type == 'SplineConv':
+        if self.type == 'spline':
             return layer(data.x, data.edge_index, data.edge_attr)
-        elif self.type == 'GCNConv':
+        elif self.type == 'gcn':
             return layer(data.x, data.edge_index)
-        elif self.type == 'LEConv':
+        elif self.type == 'le':
             # return layer(data.x, data.edge_index, data.edge_attr)
             # should not use tensor edge_attr; should use a scalar
             raise NotImplementedError
-        elif self.type == 'PointNetConv':
+        elif self.type == 'pointnet':
             return layer(data.x, data.pos, data.edge_index)
 
 

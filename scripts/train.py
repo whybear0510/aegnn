@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument("--act", default='relu', type=str)
     parser.add_argument("--run-name", default=None, type=str)
     parser.add_argument("--grid-div", default=4, type=int)
+    parser.add_argument("--conv-type", default='spline', type=str)
 
     #copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
@@ -67,9 +68,7 @@ def main(args):
         'max_epochs': args.max_epochs,
         'learning_rate': args.init_lr,
         'weight_decay': args.weight_decay,
-        'batch_size': args.batch_size,
-        'act': args.act,
-        'grid_div': args.grid_div
+        'batch_size': args.batch_size
     }
 
     model_args = {
@@ -82,8 +81,9 @@ def main(args):
         'weight_decay': train_args["weight_decay"],
         'bias': True,
         'root_weight': True,
-        'act': train_args["act"],
-        'grid_div': train_args["grid_div"]
+        'act': args.act,
+        'grid_div': args.grid_div,
+        'conv_type': args.conv_type
     }
 
     model = aegnn.models.by_task(args.task)(**model_args)
