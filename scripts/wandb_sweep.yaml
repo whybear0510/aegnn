@@ -1,5 +1,5 @@
 program: train.py
-method: random
+method: grid
 name: sweep
 command:
   - python3
@@ -11,6 +11,8 @@ command:
   - "ncars"
   - "--dim"
   - "3"
+  - "--run-name"
+  - "lastmaxp"
   - ${args}
 metric:
   goal: maximize
@@ -21,15 +23,13 @@ parameters:
   min-epochs:
     value: 35
   init-lr:
-    min: 0.0005
-    max: 0.005
-  batch-size: 
-    values: [64, 128]
+    values: [0.001, 0.0025, 0.005]
+  batch-size:
+    value: 64
   weight-decay:
-    values: [0.0, 0.005, 0.001]
+    value: 0.0
   act:
-    distribution: categorical
-    values:
-    - elu
-    - relu
+    value: "relu"
+  grid-div:
+    values: [4, 8, 16, 32, 64]
 
