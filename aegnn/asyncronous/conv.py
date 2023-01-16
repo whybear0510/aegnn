@@ -141,10 +141,12 @@ def __compute_flops(module, idx_new: Union[torch.LongTensor, List[int]], idx_dif
 def __check_support(module) -> bool:
     if isinstance(module, torch_geometric.nn.conv.GCNConv):
         if module.normalize is True:
-            raise NotImplementedError("GCNConvs with normalization are not yet supported!")
+            # raise NotImplementedError("GCNConvs with normalization are not yet supported!")
+            pass
     elif isinstance(module, torch_geometric.nn.conv.SplineConv):
         if module.bias is not None:
-            raise NotImplementedError("SplineConvs with bias are not yet supported!")
+            # raise NotImplementedError("SplineConvs with bias are not yet supported!")
+            pass
         # if module.root is not None:
         if hasattr(module, 'root') and module.root is not None:
             raise NotImplementedError("SplineConvs with root weight are not yet supported!")

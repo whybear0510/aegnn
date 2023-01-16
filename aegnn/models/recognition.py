@@ -22,8 +22,8 @@ class RecognitionModel(pl.LightningModule):
         self.model = model_by_name(network)(dataset, model_input_shape, num_outputs=num_classes, **model_kwargs)
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
-        data.pos = data.pos[:, :self.dim]
-        data.edge_attr = data.edge_attr[:, :self.dim]
+        # data.pos = data.pos[:, :self.dim]
+        # data.edge_attr = data.edge_attr[:, :self.dim]
         return self.model.forward(data)
 
     ###############################################################################################

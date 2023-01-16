@@ -38,7 +38,8 @@ def __graph_processing(module: Linear, x: torch.Tensor) -> torch.Tensor:
 
 def __check_support(module: Linear):
     if module.bias is not None:
-        raise NotImplementedError("Linear layer with bias is not yet supported!")
+        # raise NotImplementedError("Linear layer with bias is not yet supported!")
+        pass
     return True
 
 

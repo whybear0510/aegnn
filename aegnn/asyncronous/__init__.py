@@ -15,6 +15,8 @@ from aegnn.asyncronous.flops import compute_flops_from_module
 from aegnn.asyncronous.runtime import compute_runtime_from_module
 from aegnn.asyncronous.base.callbacks import CallbackFactory
 
+import pytorch_lightning as pl
+
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None,
                             log_flops: bool = False, log_runtime: bool = False, **module_kwargs):
@@ -36,7 +38,15 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     :param log_flops: log flops of asynchronous update.
     :param log_runtime: log runtime of asynchronous update.
     """
-    assert isinstance(module, torch.nn.Module), "module must be a `torch.nn.Module`"
+    # assert isinstance(module, torch.nn.Module), "module must be a `torch.nn.Module`"
+
+    if isinstance(module, pl.LightningModule):
+        nn_model = module._modules['model']
+        nn_layers = nn_model._modules
+    elif isinstance(module, torch.nn.Module):
+        nn_layers = module._modules
+    else:
+        raise TypeError(f'The type of module is {type(module)}, not a `torch.nn.Module` or a `pl.LightningModule`')
     conv_is_initial = True
     model_forward = module.forward
     module.asy_flops_log = [] if log_flops else None
@@ -46,27 +56,28 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     # Make all layers asynchronous that have an implemented asynchronous function. Otherwise use
     # the synchronous forward function.
     log_kwargs = dict(log_flops=log_flops, log_runtime=log_runtime)
-    for key, nn in module._modules.items():
+    # for key, nn in module._modules.items():
+    for key, nn in nn_layers.items():
         nn_class_name = nn.__class__.__name__
         logging.debug(f"Making layer {key} of type {nn_class_name} asynchronous")
 
         if nn_class_name in torch_geometric.nn.conv.__all__:
-            module._modules[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes,
+            nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes,
                                                           is_initial=conv_is_initial, **log_kwargs)
             conv_is_initial = False
             callback_keys.append(key)
 
         elif isinstance(nn, MaxPooling):
             assert grid_size is not None, "grid size must be defined for pooling operations"
-            module._modules[key] = make_max_pool_asynchronous(nn, grid_size=grid_size, r=r, **log_kwargs)
+            nn_layers[key] = make_max_pool_asynchronous(nn, grid_size=grid_size, r=r, **log_kwargs)
             callback_keys.append(key)
 
         elif isinstance(nn, BatchNorm):
-            module._modules[key] = make_batch_norm_asynchronous(nn, **log_kwargs)
+            nn_layers[key] = make_batch_norm_asynchronous(nn, **log_kwargs)
             # no callbacks required
 
         elif isinstance(nn, torch.nn.Linear):
-            module._modules[key] = make_linear_asynchronous(nn, **log_kwargs)
+            nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
             callback_keys.append(key)
 
         else:
@@ -74,8 +85,8 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
 
     # Set callbacks for overwriting attributes on subsequent network layers, from a function factory design.
     callback_index = 0
-    cb_listeners = [module._modules[key] for key in callback_keys]
-    for key, nn in module._modules.items():
+    cb_listeners = [nn_layers[key] for key in callback_keys]
+    for key, nn in nn_layers.items():
         if key not in callback_keys or callback_index >= len(callback_keys) - 1:
             continue
         nn.asy_pass_attribute = CallbackFactory(cb_listeners[callback_index + 1:], log_name=nn.__repr__())
@@ -87,11 +98,11 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
         out = model_forward(data, *args, **kwargs)
 
         if module.asy_flops_log is not None:
-            flops_count = [compute_flops_from_module(layer) for layer in module._modules.values()]
+            flops_count = [compute_flops_from_module(layer) for layer in nn_layers.values()]
             module.asy_flops_log.append(sum(flops_count))
             logging.debug(f"Model's modules update with overall {sum(flops_count)} flops")
         if module.asy_runtime_log is not None:
-            runtimes = [compute_runtime_from_module(layer) for layer in module._modules.values()]
+            runtimes = [compute_runtime_from_module(layer) for layer in nn_layers.values()]
             module.asy_runtime_log.append(sum(runtimes))
             logging.debug(f"Model's modules took overall {sum(runtimes)}s")
         return out
