@@ -81,11 +81,14 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
 
     edge_attr = None
     if idx_new.numel() > 0:
-        edges_new = torch.nonzero(connected_node_mask).T
+        edges_new = torch.nonzero(connected_node_mask).T #!debug: i=9, event=55: why connected_node_mask is all False?
         edges_new[1, :] = idx_new[edges_new[1, :]]
         edges_new_inv = torch.stack([edges_new[1, :], edges_new[0, :]], dim=0)
         edges_new = torch.cat([edges_new, edges_new_inv], dim=1)
         edges_new = torch.unique(edges_new, dim=1)  # rm doubled edges from concatenating the inverse
+        # torch.unique cannot keep 'size' info when 'edges_new' is a tensor([]). It's a bug and will be fixed in a future pytorch version
+        if edges_new.shape[0] != 2:
+            edges_new = edges_new.view(2,0)
 
         edges_new, _ = remove_self_loops(edges_new)
         edge_index = torch.cat([edges_connected, edges_new], dim=1)

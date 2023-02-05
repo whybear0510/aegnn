@@ -110,6 +110,28 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     module.forward = async_forward
     return module
 
+def reset_async_module(module):
+
+    if isinstance(module, pl.LightningModule):
+        nn_model = module._modules['model']
+        nn_layers = nn_model._modules
+    elif isinstance(module, torch.nn.Module):
+        nn_layers = module._modules
+    else:
+        raise TypeError(f'The type of module is {type(module)}, not a `torch.nn.Module` or a `pl.LightningModule`')
+
+
+    for key, nn in nn_layers.items():
+
+        logging.debug(f"Reset asy_graph and asy_pos of layer {key}")
+
+        if hasattr(nn_layers[key], 'asy_graph') and nn_layers[key].asy_graph is not None:
+            nn_layers[key].asy_graph = None
+        if hasattr(nn_layers[key], 'asy_pos') and nn_layers[key].asy_pos is not None:
+            nn_layers[key].asy_pos = None
+
+    return module
+
 
 __all__ = [
     "make_conv_asynchronous",

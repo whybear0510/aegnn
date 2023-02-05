@@ -23,7 +23,7 @@ def cat_cmd(*cmd_list, mode='pipe'):
 model = 'graph_res' # try graph_wen?
 task = 'recognition'
 dataset = 'ncars'
-which_gpu = 2
+which_gpu = 6
 dim = 3
 device = 'cuda'
 
@@ -50,7 +50,7 @@ conv_type = 'gcn'
 #      }
 # }
 
-# eg: CUDA_VISIBLE_DEVICES=1 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --grid-div 8 --conv-type spline --run-name spline_lastmaxp
+# eg: CUDA_VISIBLE_DEVICES=6 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --grid-div 8 --conv-type sage --run-name sage
 cmd_train = f'CUDA_VISIBLE_DEVICES={which_gpu} python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init-lr {init_lr} --weight-decay {w_decay} --act {act} --grid-div {grid_div} --conv-type {conv_type} {run_name}'
 cmd_cpresult = f'python get_latest_results.py'
 # eg: CUDA_VISIBLE_DEVICES=1 python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device cuda --dataset ncars --batch-size 64 && python pkl2csv.py

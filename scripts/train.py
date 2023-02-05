@@ -57,9 +57,9 @@ def main(args):
     project = f"aegnn-{args.dataset}-{args.task}"
     experiment_name = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     if args.run_name is None:
-        runs_name = f'lr{args.init_lr}_batch{args.batch_size}_{experiment_name}'
+        runs_name = f'lr{args.init_lr}_{args.conv_type}_{experiment_name}'
     else:
-        runs_name = f'lr{args.init_lr}_batch{args.batch_size}_{args.run_name}_{experiment_name}'
+        runs_name = f'lr{args.init_lr}_{args.conv_type}_{args.run_name}_{experiment_name}'
 
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
