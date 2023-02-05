@@ -5,7 +5,7 @@ from torch.nn import Linear
 from torch.nn.functional import elu
 from torch.nn.functional import relu
 from torch_geometric.nn.conv import SplineConv
-from torch_geometric.nn.conv import GCNConv, LEConv, PointNetConv
+from torch_geometric.nn.conv import GCNConv, LEConv, PointNetConv, SAGEConv, GraphConv, GINConv, GINEConv, ARMAConv, SGConv, MFConv, NNConv, EdgeConv, ClusterGCNConv, GENConv, FiLMConv, PDNConv
 from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.transforms import Cartesian, Distance
 
@@ -15,7 +15,7 @@ from aegnn.models.layer import MaxPooling, MaxPoolingX
 class GraphRes(torch.nn.Module):
 
     def __init__(self, dataset, input_shape: torch.Tensor, num_outputs: int, pooling_size=(16, 12),
-                 bias: bool = False, root_weight: bool = False, act: str = 'elu', grid_div: int = 4, conv_type: str = 'spline'):
+                 bias: bool = False, root_weight: bool = False, act: str = 'elu', grid_div: int = 8, conv_type: str = 'spline'):
         super(GraphRes, self).__init__()
         assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
         dim = int(input_shape[-1])
@@ -79,6 +79,107 @@ class GraphRes(torch.nn.Module):
             self.conv5 = PointNetConv(local_nn=Linear(n[4]+3, n[5]), global_nn=Linear(n[5], n[5]))
             self.conv6 = PointNetConv(local_nn=Linear(n[5]+3, n[6]), global_nn=Linear(n[6], n[6]))
             self.conv7 = PointNetConv(local_nn=Linear(n[6]+3, n[7]), global_nn=Linear(n[7], n[7]))
+        elif self.conv_type == 'sage':
+            self.conv1 = SAGEConv(n[0], n[1])
+            self.conv2 = SAGEConv(n[1], n[2])
+            self.conv3 = SAGEConv(n[2], n[3])
+            self.conv4 = SAGEConv(n[3], n[4])
+            self.conv5 = SAGEConv(n[4], n[5])
+            self.conv6 = SAGEConv(n[5], n[6])
+            self.conv7 = SAGEConv(n[6], n[7])
+        elif self.conv_type == 'graph':
+            self.edge_weight_func = Distance(cat = True)
+            self.conv1 = GraphConv(n[0], n[1])
+            self.conv2 = GraphConv(n[1], n[2])
+            self.conv3 = GraphConv(n[2], n[3])
+            self.conv4 = GraphConv(n[3], n[4])
+            self.conv5 = GraphConv(n[4], n[5])
+            self.conv6 = GraphConv(n[5], n[6])
+            self.conv7 = GraphConv(n[6], n[7])
+        elif self.conv_type == 'gin':
+            self.conv1 = GINConv(nn=Linear(n[0], n[1]))
+            self.conv2 = GINConv(nn=Linear(n[1], n[2]))
+            self.conv3 = GINConv(nn=Linear(n[2], n[3]))
+            self.conv4 = GINConv(nn=Linear(n[3], n[4]))
+            self.conv5 = GINConv(nn=Linear(n[4], n[5]))
+            self.conv6 = GINConv(nn=Linear(n[5], n[6]))
+            self.conv7 = GINConv(nn=Linear(n[6], n[7]))
+        elif self.conv_type == 'gine':
+            # self.edge_weight_func = Distance(cat = False)
+            # self.conv1 = GINEConv(nn=Linear(n[0], n[1]), edge_dim=n[0])
+            # self.conv2 = GINEConv(nn=Linear(n[1], n[2]), edge_dim=n[1])
+            # self.conv3 = GINEConv(nn=Linear(n[2], n[3]), edge_dim=n[2])
+            # self.conv4 = GINEConv(nn=Linear(n[3], n[4]), edge_dim=n[3])
+            # self.conv5 = GINEConv(nn=Linear(n[4], n[5]), edge_dim=n[4])
+            # self.conv6 = GINEConv(nn=Linear(n[5], n[6]), edge_dim=n[5])
+            # self.conv7 = GINEConv(nn=Linear(n[6], n[7]), edge_dim=n[6])
+            raise NotImplementedError("GINEConv contains some bug(?)")
+        elif self.conv_type == 'arma':
+            self.conv1 = ARMAConv(n[0], n[1], num_stacks=2, num_layers=2)
+            self.conv2 = ARMAConv(n[1], n[2], num_stacks=2, num_layers=2)
+            self.conv3 = ARMAConv(n[2], n[3], num_stacks=2, num_layers=2)
+            self.conv4 = ARMAConv(n[3], n[4], num_stacks=2, num_layers=2)
+            self.conv5 = ARMAConv(n[4], n[5], num_stacks=2, num_layers=2)
+            self.conv6 = ARMAConv(n[5], n[6], num_stacks=2, num_layers=2)
+            self.conv7 = ARMAConv(n[6], n[7], num_stacks=2, num_layers=2)
+        elif self.conv_type == 'sg' or self.conv_type == 'sg_weighted':
+            self.edge_weight_func = Distance(cat = True)
+            self.conv1 = SGConv(n[0], n[1], K=1)
+            self.conv2 = SGConv(n[1], n[2], K=1)
+            self.conv3 = SGConv(n[2], n[3], K=1)
+            self.conv4 = SGConv(n[3], n[4], K=1)
+            self.conv5 = SGConv(n[4], n[5], K=1)
+            self.conv6 = SGConv(n[5], n[6], K=1)
+            self.conv7 = SGConv(n[6], n[7], K=1)
+        elif self.conv_type == 'mf':
+            self.conv1 = MFConv(n[0], n[1])
+            self.conv2 = MFConv(n[1], n[2])
+            self.conv3 = MFConv(n[2], n[3])
+            self.conv4 = MFConv(n[3], n[4])
+            self.conv5 = MFConv(n[4], n[5])
+            self.conv6 = MFConv(n[5], n[6])
+            self.conv7 = MFConv(n[6], n[7])
+        elif self.conv_type == 'nn':
+            self.conv1 = NNConv(n[0], n[1], bias=bias, root_weight=root_weight, nn=Linear(3,n[0]*n[1]))
+            self.conv2 = NNConv(n[1], n[2], bias=bias, root_weight=root_weight, nn=Linear(3,n[1]*n[2]))
+            self.conv3 = NNConv(n[2], n[3], bias=bias, root_weight=root_weight, nn=Linear(3,n[2]*n[3]))
+            self.conv4 = NNConv(n[3], n[4], bias=bias, root_weight=root_weight, nn=Linear(3,n[3]*n[4]))
+            self.conv5 = NNConv(n[4], n[5], bias=bias, root_weight=root_weight, nn=Linear(3,n[4]*n[5]))
+            self.conv6 = NNConv(n[5], n[6], bias=bias, root_weight=root_weight, nn=Linear(3,n[5]*n[6]))
+            self.conv7 = NNConv(n[6], n[7], bias=bias, root_weight=root_weight, nn=Linear(3,n[6]*n[7]))
+        elif self.conv_type == 'edge':
+            self.conv1 = EdgeConv(nn=Linear(2*n[0], n[1]))
+            self.conv2 = EdgeConv(nn=Linear(2*n[1], n[2]))
+            self.conv3 = EdgeConv(nn=Linear(2*n[2], n[3]))
+            self.conv4 = EdgeConv(nn=Linear(2*n[3], n[4]))
+            self.conv5 = EdgeConv(nn=Linear(2*n[4], n[5]))
+            self.conv6 = EdgeConv(nn=Linear(2*n[5], n[6]))
+            self.conv7 = EdgeConv(nn=Linear(2*n[6], n[7]))
+        elif self.conv_type == 'cluster':
+            self.conv1 = ClusterGCNConv(n[0], n[1])
+            self.conv2 = ClusterGCNConv(n[1], n[2])
+            self.conv3 = ClusterGCNConv(n[2], n[3])
+            self.conv4 = ClusterGCNConv(n[3], n[4])
+            self.conv5 = ClusterGCNConv(n[4], n[5])
+            self.conv6 = ClusterGCNConv(n[5], n[6])
+            self.conv7 = ClusterGCNConv(n[6], n[7])
+        elif self.conv_type == 'film':
+            self.conv1 = FiLMConv(n[0], n[1])
+            self.conv2 = FiLMConv(n[1], n[2])
+            self.conv3 = FiLMConv(n[2], n[3])
+            self.conv4 = FiLMConv(n[3], n[4])
+            self.conv5 = FiLMConv(n[4], n[5])
+            self.conv6 = FiLMConv(n[5], n[6])
+            self.conv7 = FiLMConv(n[6], n[7])
+        elif self.conv_type == 'pdn':
+            self.conv1 = PDNConv(n[0], n[1], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv2 = PDNConv(n[1], n[2], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv3 = PDNConv(n[2], n[3], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv4 = PDNConv(n[3], n[4], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv5 = PDNConv(n[4], n[5], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv6 = PDNConv(n[5], n[6], edge_dim=3, hidden_channels=4, normalize=False)
+            self.conv7 = PDNConv(n[6], n[7], edge_dim=3, hidden_channels=4, normalize=False)
+
         else:
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
 
@@ -102,11 +203,19 @@ class GraphRes(torch.nn.Module):
         self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=bias)
 
     def convs(self, layer, data):
-        if self.conv_type == 'spline':
+        if self.conv_type == 'spline' or self.conv_type == 'gine' or self.conv_type == 'nn' or self.conv_type == 'pdn':
             return layer(data.x, data.edge_index, data.edge_attr)
-        elif self.conv_type == 'gcn':
+        elif self.conv_type == 'gcn' \
+          or self.conv_type == 'sage' \
+          or self.conv_type == 'gin' \
+          or self.conv_type == 'arma' \
+          or self.conv_type == 'sg' \
+          or self.conv_type == 'mf' \
+          or self.conv_type == 'edge' \
+          or self.conv_type == 'cluster' \
+          or self.conv_type == 'film':
             return layer(data.x, data.edge_index)
-        elif self.conv_type == 'le':
+        elif self.conv_type == 'le' or self.conv_type == 'graph' or self.conv_type == 'sg_weighted':
             return layer(data.x, data.edge_index, data.edge_weight)
         elif self.conv_type == 'pointnet':
             return layer(data.x, data.pos, data.edge_index)
@@ -116,12 +225,32 @@ class GraphRes(torch.nn.Module):
 
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
-        assert self.conv_type == 'le' or self.conv_type == 'spline' or self.conv_type == 'gcn' or self.conv_type == 'pointnet'
+        assert self.conv_type == 'le' \
+            or self.conv_type == 'spline' \
+            or self.conv_type == 'gcn' \
+            or self.conv_type == 'pointnet' \
+            or self.conv_type == 'sage' \
+            or self.conv_type == 'graph' \
+            or self.conv_type == 'gin' \
+            or self.conv_type == 'arma' \
+            or self.conv_type == 'sg' \
+            or self.conv_type == 'sg_weighted' \
+            or self.conv_type == 'mf' \
+            or self.conv_type == 'edge' \
+            or self.conv_type == 'cluster' \
+            or self.conv_type == 'film' \
+            or self.conv_type == 'pdn'
+            # or self.conv_type == 'gen'
+            # or self.conv_type == 'nn'
+            # or self.conv_type == 'gine'
 
-        if self.conv_type == 'le':
+
+        if self.conv_type == 'le' or self.conv_type == 'graph' or self.conv_type == 'sg_weighted':
             data = self.edge_weight_func(data)
             data.edge_weight = data.edge_attr[:,-1]
             data.edge_attr = data.edge_attr[:, :-1]
+        elif self.conv_type == 'gine':
+            data = self.edge_weight_func(data)
 
 
         data.x = self.norm1(self.convs(self.conv1, data))
