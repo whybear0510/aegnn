@@ -62,8 +62,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
         logging.debug(f"Making layer {key} of type {nn_class_name} asynchronous")
 
         if nn_class_name in torch_geometric.nn.conv.__all__:
-            nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes,
-                                                          is_initial=conv_is_initial, **log_kwargs)
+            nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes, is_initial=conv_is_initial, **log_kwargs)
             conv_is_initial = False
             callback_keys.append(key)
 
@@ -94,7 +93,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     module.asy_pass_attribute = CallbackFactory(cb_listeners, log_name="base model")
 
     def async_forward(data: torch_geometric.data.Data, *args, **kwargs):
-        module.asy_pass_attribute('asy_pos', data.pos)
+        module.asy_pass_attribute('asy_pos', data.pos)  # pass data.pos to all listened layers (conv, fc)
         out = model_forward(data, *args, **kwargs)
 
         if module.asy_flops_log is not None:

@@ -46,7 +46,7 @@ def sample_new_data(sample, nxt_event_idx):
     return event_new, nxt_event_idx
 
 
-
+@torch.no_grad()
 def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: int = None, iter_cnt: int = None) -> float:
     predss = []
     targets = []
@@ -60,7 +60,7 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
     df = pd.DataFrame()
     output_file = '/users/yyang22/thesis/aegnn_project/aegnn_results/mid_result'
 
-    num_test_samples = 600
+    num_test_samples = 100
 
     # for NCars dataset, #events: min=500 at 1422, max=40810 at 219; #samples = 2462
     for i, batch in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
@@ -83,7 +83,8 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
         elif init_event is not None:
             init_num_event = init_event
         else:
-            init_num_event = 25  # guarantee to have an edge between nodes #!debug from here: 54: reason: after torch.unique, 'size' is lost
+            # init_num_event = 3500  # guarantee to have an edge between nodes #!debug from here: 54: reason: after torch.unique, 'size' is lost
+            init_num_event = 25
 
         sub_predss = []
 
@@ -112,6 +113,7 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
 
         with tqdm(total=(tot_nodes-nxt_event_idx), position=2, leave=False, desc='Events') as pbar:
             while nxt_event_idx < tot_nodes:
+                torch.cuda.empty_cache()
                 # code_time = []
                 event_new, nxt_event_idx = sample_new_data(sample, nxt_event_idx)
                 event_new = event_new.to(model.device)
@@ -122,6 +124,12 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
                 y_new = torch.argmax(output_new, dim=-1)
                 sub_predss.append(y_new)
                 pbar.update(1)
+
+        # targets.append(sample.y)
+        # output_init = async_model.forward(sample) #!: TODO: debug: "async_model" have bugs, causing it wrong!
+        # # code_time.append(time())
+        # y_init = torch.argmax(output_init, dim=-1)
+        # sub_predss.append(y_init)
 
 
 
@@ -136,7 +144,7 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
 
         predss.append(sub_preds)
 
-        del events_initial, event_new, init_num_event
+        # del events_initial, event_new, init_num_event
 
 
         # code_time_diff = []

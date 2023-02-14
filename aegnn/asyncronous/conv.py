@@ -72,8 +72,12 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         pos_all = torch.cat([module.asy_graph.pos, pos_new], dim=0)
 
     logging.debug(f"Subgraph contains {idx_new.numel()} new and {idx_diff.numel()} diff nodes")
-    connected_node_mask = torch.cdist(pos_all, pos_new) <= module.asy_radius
+    node_distance = torch.cdist(pos_all, pos_new) #!debug: i=9, event=55: the torch.cdist() are wrong??
+    node_distance = (pos_all-pos_new).pow(2).sum(1).sqrt().view(-1,1)
+    connected_node_mask = node_distance <= module.asy_radius
+    # connected_node_mask = torch.zeros(pos_all.shape[0], device='cuda:0', dtype=torch.long).view(-1,1)
     idx_new_neigh = torch.unique(torch.nonzero(connected_node_mask)[:, 0])
+    # idx_new_neigh = torch.tensor([], device=x.device, dtype=torch.long)
     idx_update = torch.cat([idx_new_neigh, idx_diff])
     _, edges_connected, _, connected_edges_mask = k_hop_subgraph(idx_update, num_hops=1,
                                                                  edge_index=module.asy_graph.edge_index,
@@ -91,7 +95,9 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
             edges_new = edges_new.view(2,0)
 
         edges_new, _ = remove_self_loops(edges_new)
+        # edges_new = torch.tensor([], device=x.device, dtype=torch.long).view(2,0)
         edge_index = torch.cat([edges_connected, edges_new], dim=1)
+
 
         if module.asy_edge_attributes is not None:
             graph_new = Data(x=x_all, pos=pos_all, edge_index=edges_new)
@@ -129,6 +135,15 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
     # Therefore, we have to return the pos here as well.
     if module.asy_is_initial:
         module.asy_pass_attribute('asy_pos', pos_all)
+
+    # updating
+    if idx_new.numel() > 0:
+        module.asy_graph.x = x_all
+        module.asy_graph.pos = pos_all
+        module.asy_graph.edge_index = torch.cat([module.asy_graph.edge_index, edges_new], dim=1)
+        module.asy_graph.edge_attr = torch.cat([module.asy_graph.edge_attr, edge_attr_new])
+        module.asy_graph.y = y
+
     return y
 
 
