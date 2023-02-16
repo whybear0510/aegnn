@@ -131,6 +131,10 @@ def reset_async_module(module):
 
     return module
 
+#TODO: for debug
+def register_sync_graph(module, sync_graph):
+    module.asy_pass_attribute('sync_graph', None)
+    module.asy_pass_attribute('sync_graph', sync_graph)
 
 __all__ = [
     "make_conv_asynchronous",

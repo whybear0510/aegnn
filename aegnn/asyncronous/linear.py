@@ -59,4 +59,6 @@ def make_linear_asynchronous(module: Linear, log_flops: bool = False, log_runtim
     """
     assert __check_support(module)
     module = add_async_graph(module, r=None, log_flops=log_flops, log_runtime=log_runtime)
+
+    module.sync_graph = None #TODO: for debug
     return make_asynchronous(module, __graph_initialization, __graph_processing)

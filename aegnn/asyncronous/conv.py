@@ -72,7 +72,7 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         pos_all = torch.cat([module.asy_graph.pos, pos_new], dim=0)
 
     logging.debug(f"Subgraph contains {idx_new.numel()} new and {idx_diff.numel()} diff nodes")
-    node_distance = torch.cdist(pos_all, pos_new) #!debug: i=9, event=55: the torch.cdist() are wrong??
+    # node_distance = torch.cdist(pos_all, pos_new) #!debug: i=9, event=55: the torch.cdist() are wrong??
     node_distance = (pos_all-pos_new).pow(2).sum(1).sqrt().view(-1,1)
     connected_node_mask = node_distance <= module.asy_radius
     # connected_node_mask = torch.zeros(pos_all.shape[0], device='cuda:0', dtype=torch.long).view(-1,1)
@@ -97,6 +97,13 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         edges_new, _ = remove_self_loops(edges_new)
         # edges_new = torch.tensor([], device=x.device, dtype=torch.long).view(2,0)
         edge_index = torch.cat([edges_connected, edges_new], dim=1)
+
+
+        # #TODO: for debug
+        # nodes_involved_from_sync, edges_connected_from_sync, _, connected_edges_mask_fron_sync = k_hop_subgraph(idx_update, num_hops=1,
+        #                                                             edge_index=module.sync_graph.edge_index,
+        #                                                             num_nodes=module.sync_graph.num_nodes)
+        # edge_index_from_sync, edge_attr_from_sync = torch_geometric.utils.subgraph(idx_new, module.sync_graph.edge_index, module.sync_graph.edge_attr)
 
 
         if module.asy_edge_attributes is not None:
@@ -196,5 +203,7 @@ def make_conv_asynchronous(module, r: float, edge_attributes=None, is_initial: b
     module.asy_is_initial = is_initial
     module.asy_edge_attributes = edge_attributes
     module.sync_forward = module.forward
+
+    module.sync_graph = None #TODO: for debug
 
     return make_asynchronous(module, __graph_initialization, __graph_processing)
