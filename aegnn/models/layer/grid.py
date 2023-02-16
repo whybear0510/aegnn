@@ -18,7 +18,7 @@ def fixed_voxel_grid(pos: Tensor, full_shape: Tensor, size: Tensor, batch: Tenso
 
     # batch is None when a single sample
     if batch is None:
-        batch = torch.zeros(num_nodes, dtype=torch.long)
+        batch = torch.zeros(num_nodes, device=device, dtype=torch.long)
 
     # counting how many grids in each dimension, upward ceiling
     num_grids = torch.squeeze(torch.ceil(torch.div(full_shape, size)))
