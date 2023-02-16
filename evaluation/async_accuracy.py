@@ -32,9 +32,8 @@ def parse_args():
 
 def sample_initial_data(sample, num_events: int, radius: float, edge_attr, max_num_neighbors: int):
     data = Data(x=sample.x[:num_events], pos=sample.pos[:num_events])
-    data.batch = torch.zeros(data.num_nodes, device=data.x.device)
-    data.edge_index = torch_geometric.nn.radius_graph(data.pos, r=radius, max_num_neighbors=max_num_neighbors).long()
-    if edge_attr is not None: data.edge_attr = edge_attr(data).edge_attr
+    subset = torch.arange(num_events)
+    data.edge_index, data.edge_attr = torch_geometric.utils.subgraph(subset, sample.edge_index, sample.edge_attr)
     nxt_event_idx = num_events
     return data, nxt_event_idx
 
@@ -67,24 +66,23 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
 
         if i==num_test_samples: break
 
-        # if i!=9:continue  #!debug
+        # if i!=43:continue  #!debug: at 43, the sample init func will be fail at (index<size[i]) (??)
 
-
-        async_model = aegnn.asyncronous.reset_async_module(async_model)
 
         sample = batch
         sample = sample.to(model.device)
         tot_nodes = sample.num_nodes
-        # targets.append(sample.y)
-        # print(f'ground truth = {sample.y}')
+
+        async_model = aegnn.asyncronous.reset_async_module(async_model)
+        aegnn.asyncronous.register_sync_graph(async_model, sample) #TODO: for debug
 
         if init_event is None and iter_cnt is not None:
             init_num_event = tot_nodes - iter_cnt
         elif init_event is not None:
             init_num_event = init_event
         else:
-            # init_num_event = 3500  # guarantee to have an edge between nodes #!debug from here: 54: reason: after torch.unique, 'size' is lost
-            init_num_event = 25
+            # init_num_event = 25  # guarantee to have an edge between nodes #!debug from here: 54: reason: after torch.unique, 'size' is lost
+            init_num_event = tot_nodes - 500
 
         sub_predss = []
 
@@ -125,12 +123,9 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
                 sub_predss.append(y_new)
                 pbar.update(1)
 
-        # targets.append(sample.y)
-        # output_init = async_model.forward(sample) #!: TODO: debug: "async_model" have bugs, causing it wrong!
-        # # code_time.append(time())
-        # y_init = torch.argmax(output_init, dim=-1)
-        # sub_predss.append(y_init)
-
+        # print(f'sample = {sample}')
+        # print(f'async = {async_model.model.conv1.asy_graph}')
+        # exit()
 
 
         sub_preds = torch.cat(sub_predss)
@@ -144,15 +139,6 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
 
         predss.append(sub_preds)
 
-        # del events_initial, event_new, init_num_event
-
-
-        # code_time_diff = []
-        # idx=0
-        # while idx < len(code_time)-1:
-        #     code_time_diff.append(code_time[idx+1]-code_time[idx])
-        #     idx += 1
-        # print(f'added:{code_time_diff}')
 
 
 
