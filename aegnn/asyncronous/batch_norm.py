@@ -7,10 +7,15 @@ from .base.base import make_asynchronous, add_async_graph
 
 
 def __graph_initialization(module: BatchNorm, x: torch.Tensor) -> torch.Tensor:
-    mean = torch.mean(x, dim=0)
-    var = torch.var(x, dim=0) + module.module.eps
-    y = (x - mean) / var * module.module.weight + module.module.bias
-    module.asy_graph = torch_geometric.data.Data(x=mean, variance=var)
+    if module.training:
+        mean = torch.mean(x, dim=0)
+        var = torch.var(x, dim=0) + module.module.eps
+    else:
+        mean = module.module.running_mean
+        var = module.module.running_var + module.module.eps
+
+    y = ((x - mean) / torch.sqrt(var)) * module.module.weight + module.module.bias
+    module.asy_graph = torch_geometric.data.Data(mean=mean, variance=var)
 
     # If required, compute the flops of the asynchronous update operation.
     # flops computation from https://github.com/sovrasov/flops-counter.pytorch/
@@ -28,7 +33,7 @@ def __graph_processing(module: BatchNorm, x: torch.Tensor) -> torch.Tensor:
     the dense implementation. Therefore, we approximate the distribution with the initial distribution as
     num_new_events << num_initial_events.
     """
-    y = (x - module.asy_graph.x) / module.asy_graph.variance * module.module.weight + module.module.bias
+    y = ((x - module.asy_graph.mean) / torch.sqrt(module.asy_graph.variance)) * module.module.weight + module.module.bias
 
     # If required, compute the flops of the asynchronous update operation.
     if module.asy_flops_log is not None:
