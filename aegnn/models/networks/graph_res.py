@@ -252,8 +252,8 @@ class GraphRes(torch.nn.Module):
         elif self.conv_type == 'gine':
             data = self.edge_weight_func(data)
 
-
-        data.x = self.norm1(self.convs(self.conv1, data))
+        data.x = self.convs(self.conv1, data)
+        data.x = self.norm1(data.x)
         data.x = self.act(data.x)
         data.x = self.norm2(self.convs(self.conv2, data))
         data.x = self.act(data.x)
