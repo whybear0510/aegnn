@@ -137,7 +137,7 @@ def main(args):
 
 
     trainer = pl.Trainer.from_argparse_args(args, **trainer_kwargs)
-    trainer.fit(model, datamodule=dm)
+    trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
 
 
 if __name__ == '__main__':
