@@ -9,6 +9,7 @@ from typing import Callable, List, Optional, Union
 
 from .utils.normalization import normalize_time
 from .ncaltech101 import NCaltech101
+from aegnn.asyncronous.base.utils import causal_radius_graph
 
 
 class NCars(NCaltech101):
@@ -42,13 +43,16 @@ class NCars(NCaltech101):
 
         # Re-weight temporal vs. spatial dimensions to account for different resolutions.
         data.pos[:, 2] = normalize_time(data.pos[:, 2])
+        # data = data.to('cuda')
 
         # Coarsen graph by uniformly sampling n points from the event point cloud.
         # data = self.sub_sampling(data, n_samples=params["n_samples"], sub_sample=params["sampling"])
 
         # Radius graph generation.
         # data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
-        data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=40811) #!debug: this max nei basically equals to infinite
+        # data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=data.pos.shape[0]) #!debug: this max nei basically equals to infinite
+        data.edge_index = causal_radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
+
         return data
 
     #########################################################################################################
