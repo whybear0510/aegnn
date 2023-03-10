@@ -8,7 +8,8 @@ from torch import Tensor
 
 def fixed_voxel_grid(pos: Tensor, full_shape: Tensor, size: Tensor, batch: Tensor = None) -> Tensor:
 
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = pos.device
 
     # params and check
     node_dims = pos.size(1)
