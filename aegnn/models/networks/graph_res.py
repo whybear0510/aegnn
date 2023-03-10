@@ -47,13 +47,13 @@ class GraphRes(torch.nn.Module):
         self.conv_type = conv_type
 
         if self.conv_type == 'spline':
-            self.conv1 = SplineConv(n[0], n[1], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv2 = SplineConv(n[1], n[2], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv3 = SplineConv(n[2], n[3], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv4 = SplineConv(n[3], n[4], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv5 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
-            self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=False, root_weight=root_weight)
+            self.conv1 = SplineConv(n[0], n[1], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv2 = SplineConv(n[1], n[2], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv3 = SplineConv(n[2], n[3], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv4 = SplineConv(n[3], n[4], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv5 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+            self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
         elif self.conv_type == 'gcn':
             self.conv1 = GCNConv(n[0], n[1])
             self.conv2 = GCNConv(n[1], n[2])
@@ -200,7 +200,7 @@ class GraphRes(torch.nn.Module):
         num_grids = grid_div*grid_div
         pooling_dm_dims = torch.div(self.input_shape[:2], grid_div)
         self.pool7 = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
-        self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=bias)
+        self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
 
     def convs(self, layer, data):
         if self.conv_type == 'spline' or self.conv_type == 'gine' or self.conv_type == 'nn' or self.conv_type == 'pdn':
@@ -275,6 +275,11 @@ class GraphRes(torch.nn.Module):
         data.x = self.norm7(self.convs(self.conv7, data))
         data.x = self.act(data.x)
         data.x = data.x + x_sc
+
+        # TODO: sudo-async, only for debug
+        if hasattr(self.conv1, 'asy_graph'):
+            data.pos = self.conv1.asy_graph.pos
+            data.batch = None
 
         x = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
         x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
