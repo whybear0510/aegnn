@@ -19,27 +19,28 @@ def __graph_initialization(module: Linear, x: torch.Tensor) -> torch.Tensor:
 
 
 def __graph_processing(module: Linear, x: torch.Tensor) -> torch.Tensor:
-    diff_idx = torch.nonzero(x - module.asy_graph.x).t().detach().cpu().numpy()  # numpy for indexing
-    x_diff = x[diff_idx] - module.asy_graph.x[diff_idx]
-    y_residual = torch.mul(module.weight[:, diff_idx[1, :]], x_diff).t()
+    diff_idx = (torch.nonzero(x - module.asy_graph.x).t())[1,:]
+    if diff_idx.numel() > 0:
+        x_diff = x[:, diff_idx] - module.asy_graph.x[:, diff_idx]
+        partial_w = (module.weight[:, diff_idx])
+        y_diff = torch.matmul(x_diff, partial_w.t())
 
-    # Update the graph with the new values (only there where it has changed).
-    module.asy_graph.x[diff_idx] = x[diff_idx]
-    if diff_idx.size > 0:
-        module.asy_graph.y[diff_idx[0, :], :] += y_residual
+        # Update the graph with the new values (only there where it has changed).
+        module.asy_graph.x[:, diff_idx] = x[:, diff_idx]
+        module.asy_graph.y += y_diff
 
     # If required, compute the flops of the asynchronous update operation.
     if module.asy_flops_log is not None:
-        flops = int(diff_idx.shape[0] * diff_idx.shape[1])
-        flops += y_residual.numel()  # graph update
+        flops = int(diff_idx.numel())
+        flops += y_diff.numel()  # graph update
         module.asy_flops_log.append(flops)
     return module.asy_graph.y
 
 
 def __check_support(module: Linear):
     if module.bias is not None:
-        # raise NotImplementedError("Linear layer with bias is not yet supported!")
-        pass
+        raise NotImplementedError("Linear layer with bias is not yet supported!")
+        # pass
     return True
 
 
