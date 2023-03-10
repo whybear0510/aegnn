@@ -7,6 +7,7 @@ from torch_geometric.data import Data
 from torch_geometric.typing import Adj
 from torch_geometric.utils import k_hop_subgraph, remove_self_loops
 from typing import List, Union
+from torch_geometric.utils import to_undirected, degree
 
 from .base.base import make_asynchronous, add_async_graph
 from .base.utils import compute_edges, graph_changed_nodes, graph_new_nodes
@@ -28,6 +29,13 @@ def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge
         y = module.sync_forward(x, edge_index=edge_index, edge_attr=edge_attr)
     module.asy_graph = Data(x=x, pos=pos, edge_index=edge_index, edge_attr=edge_attr, y=y)
 
+    module.max_num_neighbors = 32
+    module.num_old_edges = module.max_num_neighbors // 2
+    module.available_neighbors = module.max_num_neighbors * torch.ones(module.sync_graph.num_nodes, device=pos.device)
+    d = degree(edge_index[0, :], num_nodes=module.sync_graph.num_nodes)
+    module.available_neighbors -= d
+
+
     # If required, compute the flops of the asynchronous update operation. Therefore, sum the flops for each node
     # update, as they highly depend on the number of neighbors of this node.
     if module.asy_flops_log is not None:
@@ -40,7 +48,7 @@ def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge
         module.asy_pass_attribute('asy_pos', pos)
     return module.asy_graph.y
 
-
+#TODO: remove all asy_graph processing to the outside
 def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: torch.Tensor = None):
     """Asynchronous graph update for graph convolutional layer.
 
@@ -51,6 +59,8 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
 
     :param x: graph nodes features.
     """
+    assert torch.nonzero(module.asy_graph.edge_index[0,:] <= module.asy_graph.num_nodes).numel()>0
+
     pos = module.asy_pos
     logging.debug(f"Input graph with x = {x.shape} and pos = {pos.shape}")
     logging.debug(f"Internal graph = {module.asy_graph}")
@@ -72,37 +82,55 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         pos_all = torch.cat([module.asy_graph.pos, pos_new], dim=0)
 
     logging.debug(f"Subgraph contains {idx_new.numel()} new and {idx_diff.numel()} diff nodes")
-    # node_distance = torch.cdist(pos_all, pos_new) #!debug: i=9, event=55: the torch.cdist() are wrong??
+    # node_distance = torch.cdist(pos_all, pos_new)  # for PyTorch >= 1.13.0
     node_distance = (pos_all-pos_new).pow(2).sum(1).sqrt().view(-1,1)
     connected_node_mask = node_distance <= module.asy_radius
-    # connected_node_mask = torch.zeros(pos_all.shape[0], device='cuda:0', dtype=torch.long).view(-1,1)
+    connected_node_mask[-1, :] = False  # remove self loop
+
+    full_neighbors_idx = (module.available_neighbors[:pos_all.shape[0]] <= 0).nonzero()
+    connected_node_mask[full_neighbors_idx, :] = False # if full, hidden this node
+
     idx_new_neigh = torch.unique(torch.nonzero(connected_node_mask)[:, 0])
-    # idx_new_neigh = torch.tensor([], device=x.device, dtype=torch.long)
-    idx_update = torch.cat([idx_new_neigh, idx_diff])
+    if idx_new_neigh.numel() > module.num_old_edges:
+            idx_new_neigh = idx_new_neigh[:module.num_old_edges] # clamp, reserve some edges for future nodes; for now, first connect older nodes, not nearer nodes
+    idx_update = torch.cat([idx_new, idx_new_neigh, idx_diff])
+    # print(f'idx_new:{idx_new}')
     _, edges_connected, _, connected_edges_mask = k_hop_subgraph(idx_update, num_hops=1,
                                                                  edge_index=module.asy_graph.edge_index,
                                                                  num_nodes=pos_all.shape[0])
 
     edge_attr = None
     if idx_new.numel() > 0:
-        edges_new = torch.nonzero(connected_node_mask).T #!debug: i=9, event=55: why connected_node_mask is all False?
-        edges_new[1, :] = idx_new[edges_new[1, :]]
-        edges_new_inv = torch.stack([edges_new[1, :], edges_new[0, :]], dim=0)
-        edges_new = torch.cat([edges_new, edges_new_inv], dim=1)
-        edges_new = torch.unique(edges_new, dim=1)  # rm doubled edges from concatenating the inverse
-        # torch.unique cannot keep 'size' info when 'edges_new' is a tensor([]). It's a bug and will be fixed in a future pytorch version
-        if edges_new.shape[0] != 2:
-            edges_new = edges_new.view(2,0)
+        # edges_new = torch.nonzero(connected_node_mask).T
+        # edges_new[1, :] = idx_new[edges_new[1, :]]
+        # edges_new_inv = torch.stack([edges_new[1, :], edges_new[0, :]], dim=0)
+        # edges_new = torch.cat([edges_new, edges_new_inv], dim=1)
+        # edges_new = torch.unique(edges_new, dim=1)  # rm doubled edges from concatenating the inverse
+        # # torch.unique cannot keep 'size' info when 'edges_new' is a tensor([]). It's a bug and will be fixed in a future pytorch version
+        # if edges_new.shape[0] != 2:
+        #     edges_new = edges_new.view(2,0)
 
-        edges_new, _ = remove_self_loops(edges_new)
-        # edges_new = torch.tensor([], device=x.device, dtype=torch.long).view(2,0)
+        # create connected nodes idx
+        idx_src = torch.nonzero(connected_node_mask)[:, 0].to(torch.long)
+        idx_src = idx_src.to(x.device)
+        if idx_src.numel() > module.num_old_edges:
+            idx_src = idx_src[:module.num_old_edges] # clamp, reserve some edges for future nodes; for now, first connect older nodes, not nearer nodes
+        idx_dst = (idx_new * torch.ones_like(idx_src, device=x.device)).to(torch.long)
+
+        # when connected, -1 available neighbors for every 2 nodes of an edge
+        module.available_neighbors[idx_src] -= 1
+        module.available_neighbors[idx_dst] -= idx_dst.numel()
+
+        # create edges
+        edges_new = torch.cat([idx_src.unsqueeze(0), idx_dst.unsqueeze(0)], dim=0)
+
+        edges_new = to_undirected(edges_new)
+        # edges_new,_ = remove_self_loops(edges_new)
         edge_index = torch.cat([edges_connected, edges_new], dim=1)
 
 
         # #TODO: for debug
-        # nodes_involved_from_sync, edges_connected_from_sync, _, connected_edges_mask_fron_sync = k_hop_subgraph(idx_update, num_hops=1,
-        #                                                             edge_index=module.sync_graph.edge_index,
-        #                                                             num_nodes=module.sync_graph.num_nodes)
+        nodes_involved_from_sync, edges_connected_from_sync, _, connected_edges_mask_fron_sync = k_hop_subgraph(idx_update, num_hops=1,edge_index=module.sync_graph.edge_index,num_nodes=module.sync_graph.num_nodes)
         # edge_index_from_sync, edge_attr_from_sync = torch_geometric.utils.subgraph(idx_new, module.sync_graph.edge_index, module.sync_graph.edge_attr)
 
 
@@ -131,6 +159,7 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         # Concat old and updated feature for output feature vector.
         y[idx_update] = y_update[idx_update]
     logging.debug(f"Updated {idx_update.numel()} nodes in asy. graph of module {module}")
+
 
     # If required, compute the flops of the asynchronous update operation. Therefore, sum the flops for each node
     # update, as they highly depend on the number of neighbors of this node.
@@ -166,14 +195,15 @@ def __compute_flops(module, idx_new: Union[torch.LongTensor, List[int]], idx_dif
 def __check_support(module) -> bool:
     if isinstance(module, torch_geometric.nn.conv.GCNConv):
         if module.normalize is True:
-            # raise NotImplementedError("GCNConvs with normalization are not yet supported!")
-            pass
+            raise NotImplementedError("GCNConvs with normalization are not yet supported!")
+            # pass
     elif isinstance(module, torch_geometric.nn.conv.SplineConv):
         if module.bias is not None:
-            # raise NotImplementedError("SplineConvs with bias are not yet supported!")
-            pass
+            raise NotImplementedError("SplineConvs with bias are not yet supported!")
+            # pass
         # if module.root is not None:
-        if hasattr(module, 'root') and module.root is not None:
+        # if hasattr(module, 'root') and module.root is not None:
+        if module.root_weight is True:
             raise NotImplementedError("SplineConvs with root weight are not yet supported!")
     return True
 
