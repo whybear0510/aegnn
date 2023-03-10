@@ -129,11 +129,6 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         edge_index = torch.cat([edges_connected, edges_new], dim=1)
 
 
-        # #TODO: for debug
-        nodes_involved_from_sync, edges_connected_from_sync, _, connected_edges_mask_fron_sync = k_hop_subgraph(idx_update, num_hops=1,edge_index=module.sync_graph.edge_index,num_nodes=module.sync_graph.num_nodes)
-        # edge_index_from_sync, edge_attr_from_sync = torch_geometric.utils.subgraph(idx_new, module.sync_graph.edge_index, module.sync_graph.edge_attr)
-
-
         if module.asy_edge_attributes is not None:
             graph_new = Data(x=x_all, pos=pos_all, edge_index=edges_new)
             edge_attr_new = module.asy_edge_attributes(graph_new).edge_attr
