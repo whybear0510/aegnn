@@ -76,7 +76,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             # no callbacks required
 
         elif isinstance(nn, torch.nn.Linear):
-            nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
+            # nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
             callback_keys.append(key)
 
         else:
