@@ -4,7 +4,7 @@ import torch_geometric
 from torch.nn import Linear
 from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv, SplineConv, BatchNorm
-from torch.nn.functional import elu
+from torch.nn.functional import elu, relu
 import pytorch_lightning as pl
 import networkx as nx
 from torch_geometric.utils import to_networkx
@@ -40,7 +40,7 @@ class net(torch.nn.Module):
         # self.conv2 = GCNConv(2, 4)
         self.norm1 = BatchNorm(in_channels=2)
         self.norm2 = BatchNorm(in_channels=4)
-        self.act = elu
+        self.act = relu
 
         self.input_shape = torch.tensor([100,100,3]).to(device)
         grid_div = 4
