@@ -4,12 +4,13 @@ import torch.nn
 import torch_geometric
 
 from torch_geometric.nn.norm import BatchNorm
-from aegnn.models.layer import MaxPooling
+from aegnn.models.layer import MaxPooling, MaxPoolingX
 
 from aegnn.asyncronous.conv import make_conv_asynchronous
 from aegnn.asyncronous.batch_norm import make_batch_norm_asynchronous
 from aegnn.asyncronous.linear import make_linear_asynchronous
-from aegnn.asyncronous.max_pool import make_max_pool_asynchronous
+# from aegnn.asyncronous.max_pool import make_max_pool_asynchronous
+from aegnn.asyncronous.max_pool_x import make_max_pool_x_asynchronous
 
 from aegnn.asyncronous.flops import compute_flops_from_module
 from aegnn.asyncronous.runtime import compute_runtime_from_module
@@ -66,18 +67,22 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             conv_is_initial = False
             callback_keys.append(key)
 
-        elif isinstance(nn, MaxPooling):
-            assert grid_size is not None, "grid size must be defined for pooling operations"
-            nn_layers[key] = make_max_pool_asynchronous(nn, grid_size=grid_size, r=r, **log_kwargs)
-            callback_keys.append(key)
+        # elif isinstance(nn, MaxPooling):
+        #     assert grid_size is not None, "grid size must be defined for pooling operations"
+        #     nn_layers[key] = make_max_pool_asynchronous(nn, grid_size=grid_size, r=r, **log_kwargs)
+        #     callback_keys.append(key)
+
+        elif isinstance(nn, MaxPoolingX):
+            nn_layers[key] = make_max_pool_x_asynchronous(nn, **log_kwargs)
+            # callback_keys.append(key)
 
         elif isinstance(nn, BatchNorm):
             nn_layers[key] = make_batch_norm_asynchronous(nn, **log_kwargs)
             # no callbacks required
 
-        elif isinstance(nn, torch.nn.Linear):
-            # nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
-            callback_keys.append(key)
+        # elif isinstance(nn, torch.nn.Linear):
+        #     nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
+        #     # callback_keys.append(key)
 
         else:
             logging.debug(f"Asynchronous module for {nn_class_name} is not implemented, using dense module.")
