@@ -1,4 +1,3 @@
-import aegnn
 import argparse
 import logging
 import os
@@ -15,6 +14,7 @@ from torch_geometric.utils import subgraph
 from tqdm import tqdm
 tprint = tqdm.write
 from typing import Iterable, Tuple
+import aegnn
 from aegnn.asyncronous.base.utils import causal_radius_graph
 
 
