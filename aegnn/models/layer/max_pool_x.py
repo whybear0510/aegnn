@@ -23,7 +23,7 @@ class MaxPoolingX(torch.nn.Module):
             batch = torch.zeros(pos.size(0), device=pos.device, dtype=torch.long)
         cluster = fixed_voxel_grid(pos, full_shape=self.full_shape, size=self.voxel_size, batch=batch)
         x, _ = max_pool_x(cluster, x, batch, size=self.size)
-        return x
+        return x, cluster
 
     def __repr__(self):
         return f"{self.__class__.__name__}(voxel_size={self.voxel_size}, size={self.size})"
