@@ -57,6 +57,8 @@ cmd_cpresult = f'python get_latest_results.py'
 # eg: CUDA_VISIBLE_DEVICES=1 python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device cuda --dataset ncars --batch-size 64 --fast-test
 cmd_accuracy = f'CUDA_VISIBLE_DEVICES={which_gpu} python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device {device} --dataset {dataset} --batch-size {batch_size} --fast-test'
 
+# eg: CUDA_VISIBLE_DEVICES=2 python3 ../evaluation/async_accuracy.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230227151127/epoch=71-step=14615.pt --device cuda --dataset ncars --batch-size 1
+
 
 cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy)
 os.system(cmd)
