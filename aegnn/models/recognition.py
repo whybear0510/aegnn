@@ -1,7 +1,7 @@
 import torch
 import torch_geometric
 import pytorch_lightning as pl
-import pytorch_lightning.metrics.functional as pl_metrics
+import torchmetrics.functional as pl_metrics
 
 from torch.nn.functional import softmax
 from typing import Tuple
@@ -13,7 +13,8 @@ class RecognitionModel(pl.LightningModule):
     def __init__(self, network, dataset: str, num_classes, img_shape: Tuple[int, int],
                  dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, **model_kwargs):
         super(RecognitionModel, self).__init__()
-        self.optimizer_kwargs = dict(lr=learning_rate, weight_decay=weight_decay)
+        self.lr = learning_rate
+        self.weight_decay = weight_decay
         self.criterion = torch.nn.CrossEntropyLoss()
         self.num_outputs = num_classes
         self.dim = dim
@@ -50,8 +51,10 @@ class RecognitionModel(pl.LightningModule):
         return predictions
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(),  **self.optimizer_kwargs)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
+        # lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer,base_lr=(self.lr*0.1),max_lr=(self.lr*2), cycle_momentum=False, mode='triangular2', gamma=0.8, step_size_up=5)
+        # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=40, eta_min=(self.lr*0.1))
         return [optimizer], [lr_scheduler]
 
 
