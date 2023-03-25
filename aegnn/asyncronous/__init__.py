@@ -18,6 +18,8 @@ from aegnn.asyncronous.base.callbacks import CallbackFactory
 
 import pytorch_lightning as pl
 
+from ..models.networks.my_conv import MyConv
+
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None,
                             log_flops: bool = False, log_runtime: bool = False, **module_kwargs):
@@ -67,6 +69,10 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             conv_is_initial = False
             callback_keys.append(key)
 
+        elif isinstance(nn, MyConv):
+            nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes, is_initial=conv_is_initial, **log_kwargs)
+            conv_is_initial = False
+            callback_keys.append(key)
         # elif isinstance(nn, MaxPooling):
         #     assert grid_size is not None, "grid size must be defined for pooling operations"
         #     nn_layers[key] = make_max_pool_asynchronous(nn, grid_size=grid_size, r=r, **log_kwargs)
