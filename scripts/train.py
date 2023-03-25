@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument("--run-name", default=None, type=str)
     parser.add_argument("--grid-div", default=4, type=int)
     parser.add_argument("--conv-type", default='spline', type=str)
+    parser.add_argument("--auto-lr-find", action="store_true")
 
     #copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
@@ -93,10 +94,10 @@ def main(args):
     # model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, list(dm.dims), edge_attr)
 
 
-    wandb.init(project="aegnn", entity="yyfteam", name=runs_name)
     # log_settings = wandb.Settings(start_method="thread")  # for Windows?
 
     if not args.debug:
+        wandb.init(project="aegnn", entity="yyfteam", name=runs_name)
         wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir)
         if args.log_gradients:
             wandb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
@@ -109,6 +110,7 @@ def main(args):
     callbacks = [
         pl.callbacks.LearningRateMonitor(),
         # pl.callbacks.EarlyStopping(monitor="Val/Accuracy", min_delta=0.01, patience=8, verbose=False, mode="max"),
+        # pl.callbacks.StochasticWeightAveraging(swa_lrs=1e-2),
         aegnn.utils.callbacks.BBoxLogger(classes=dm.classes),
         aegnn.utils.callbacks.PHyperLogger(args),
         aegnn.utils.callbacks.EpochLogger(),
@@ -126,6 +128,7 @@ def main(args):
     trainer_kwargs["max_epochs"] = train_args['max_epochs']
     trainer_kwargs["logger"] = logger
     trainer_kwargs["callbacks"] = callbacks
+    trainer_kwargs["auto_lr_find"] = args.auto_lr_find
 
     # trainer_kwargs["gpus"] = [args.gpu] if args.gpu is not None else None
     if not args.cpu:
@@ -137,6 +140,7 @@ def main(args):
 
 
     trainer = pl.Trainer.from_argparse_args(args, **trainer_kwargs)
+    trainer.tune(model, dm.train_dataloader(), dm.val_dataloader())
     trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
 
 
