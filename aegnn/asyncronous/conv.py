@@ -5,16 +5,19 @@ import torch_geometric.nn.conv
 
 from torch_geometric.data import Data
 from torch_geometric.typing import Adj
-from torch_geometric.utils import k_hop_subgraph, remove_self_loops
+from torch_geometric.utils import k_hop_subgraph, remove_self_loops, add_self_loops
 from typing import List, Union
 from torch_geometric.utils import to_undirected, degree
+from torch_geometric.nn.conv import GCNConv, LEConv, PointNetConv, SplineConv
 
 from .base.base import make_asynchronous, add_async_graph
 from .base.utils import compute_edges, graph_changed_nodes, graph_new_nodes
 from .flops import compute_flops_conv
 
+from ..models.networks.my_conv import MyConv
 
-def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge_attr=None):
+
+def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge_attr=None, **kwargs):
     pos = module.asy_pos
     if edge_attr is None:
         if edge_index is None:
@@ -23,10 +26,22 @@ def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge
             attr_data = Data(pos=pos, edge_index=edge_index)
             edge_attr = module.asy_edge_attributes(attr_data).edge_attr
 
-    if edge_attr is None:
-        y = module.sync_forward(x, edge_index=edge_index)
-    else:
+
+
+    if module.conv_type == 'spline':
         y = module.sync_forward(x, edge_index=edge_index, edge_attr=edge_attr)
+    elif module.conv_type == 'gcn':
+        y = module.sync_forward(x, edge_index=edge_index)
+    elif module.conv_type == 'pointnet':
+        y = module.sync_forward(x, pos=pos, edge_index=edge_index)
+    elif module.conv_type == 'my':
+        y = module.sync_forward(x, pos=pos, edge_index=edge_index)
+    else:
+        if edge_attr is None:
+            y = module.sync_forward(x, edge_index=edge_index)
+        else:
+            y = module.sync_forward(x, edge_index=edge_index, edge_attr=edge_attr)
+
     module.asy_graph = Data(x=x, pos=pos, edge_index=edge_index, edge_attr=edge_attr, y=y)
 
     module.max_num_neighbors = 32
@@ -49,7 +64,7 @@ def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge
     return module.asy_graph.y
 
 #TODO: remove all asy_graph processing to the outside
-def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: torch.Tensor = None):
+def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: torch.Tensor = None, **kwargs):
     """Asynchronous graph update for graph convolutional layer.
 
     After the initialization of the graph, only the nodes (and their receptive field) have to updated which either
@@ -139,20 +154,53 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
         if module.asy_edge_attributes is not None:
             edge_attr = module.asy_graph.edge_attr[connected_edges_mask, :]
 
+    need_self_loops = getattr(module, 'add_self_loops', False)
+    if need_self_loops:
+        edge_index,_ = add_self_loops(edge_index)
+
     out_channels = module.asy_graph.y.size()[-1]
     y = torch.cat([module.asy_graph.y.clone(), torch.zeros(x_new.size()[0], out_channels, device=x.device)])
     if edge_index.numel() > 0:
-        x_j = x_all[edge_index[0, :], :]
-        if edge_attr is not None:
-            phi = module.message(x_j, edge_attr=edge_attr)
-        else:
-            x_j = torch.matmul(x_j, module.weight)
-            phi = module.message(x_j, edge_weight=None)
+        # # original:
+        # x_j = x_all[edge_index[0, :], :]
+        # if edge_attr is not None:
+        #     phi = module.message(x_j, edge_attr=edge_attr)
+        # else:
+        #     x_j = torch.matmul(x_j, module.weight)
+        #     phi = module.message(x_j, edge_weight=None)
 
-        # Use the internal message passing for feature aggregation.
-        y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
+        # # Use the internal message passing for feature aggregation.
+        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
+        y_update_test = module.propagate(edge_index, x=x_all, edge_attr=edge_attr, size=None)
+        y_update = y_update_test
+
+        # # pointnet
+        # x_j = x_all[edge_index[0, :], :]
+        # x_i = x_all[edge_index[1, :], :]
+        # pos_j = pos_all[edge_index[0, :], :]
+        # pos_i = pos_all[edge_index[1, :], :]
+        # phi = module.message(x_j, pos_i=pos_i, pos_j=pos_j)
+
+        # # Use the internal message passing for feature aggregation.
+        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
+        # y_update_test = module.propagate(edge_index, x=x_all, pos=pos_all, size=None)
+
+        # # gcn
+        # x_all_new = module.lin(x_all)
+        # x_j = x_all_new[edge_index[0, :], :]
+        # x_i = x_all_new[edge_index[1, :], :]
+        # phi = module.message(x_j, edge_weight=None)
+
+        # # Use the internal message passing for feature aggregation.
+        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all_new.size()[0])
+        # y_update_test = module.propagate(edge_index, x=x_all_new, edge_weight=None, size=None)
+
+        all_close = torch.allclose(y_update, y_update_test, atol=1e-5)
+        if not all_close:
+            where_close = torch.isclose(y_update, y_update_test)
+            where_c = torch.nonzero(~where_close)
         # Concat old and updated feature for output feature vector.
-        y[idx_update] = y_update[idx_update]
+        y[idx_update] = y_update_test[idx_update]
     logging.debug(f"Updated {idx_update.numel()} nodes in asy. graph of module {module}")
 
 
@@ -230,5 +278,12 @@ def make_conv_asynchronous(module, r: float, edge_attributes=None, is_initial: b
     module.sync_forward = module.forward
 
     module.sync_graph = None #TODO: for debug
+
+    if isinstance(module, SplineConv): module.conv_type = 'spline'
+    elif isinstance(module, GCNConv): module.conv_type = 'gcn'
+    elif isinstance(module, PointNetConv): module.conv_type = 'pointnet'
+    elif isinstance(module, LEConv): module.conv_type = 'le'
+    elif isinstance(module, MyConv): module.conv_type = 'my'
+    else: module.conv_type = 'other'
 
     return make_asynchronous(module, __graph_initialization, __graph_processing)
