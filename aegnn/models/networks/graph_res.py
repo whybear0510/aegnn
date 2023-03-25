@@ -11,6 +11,8 @@ from torch_geometric.transforms import Cartesian, Distance
 
 from aegnn.models.layer import MaxPooling, MaxPoolingX
 
+from .my_conv import MyConv
+
 
 class GraphRes(torch.nn.Module):
 
@@ -34,8 +36,8 @@ class GraphRes(torch.nn.Module):
         # Set dataset specific hyper-parameters.
         if dataset == "ncars":
             kernel_size = 2
-            n = [1, 8, 16, 16, 16, 32, 32, 32, 64]
-            pooling_outputs = 64
+            n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
+            pooling_outputs = n[-1]
         elif dataset == "ncaltech101" or dataset == "gen1":
             kernel_size = 8
             n = [1, 16, 32, 32, 32, 128, 128, 128]
@@ -47,6 +49,7 @@ class GraphRes(torch.nn.Module):
         self.conv_type = conv_type
 
         if self.conv_type == 'spline':
+            self.conv0 = SplineConv(1, 16, dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
             self.conv1 = SplineConv(n[0], n[1], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
             self.conv2 = SplineConv(n[1], n[2], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
             self.conv3 = SplineConv(n[2], n[3], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
@@ -55,13 +58,14 @@ class GraphRes(torch.nn.Module):
             self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
             self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
         elif self.conv_type == 'gcn':
-            self.conv1 = GCNConv(n[0], n[1])
-            self.conv2 = GCNConv(n[1], n[2])
-            self.conv3 = GCNConv(n[2], n[3])
-            self.conv4 = GCNConv(n[3], n[4])
-            self.conv5 = GCNConv(n[4], n[5])
-            self.conv6 = GCNConv(n[5], n[6])
-            self.conv7 = GCNConv(n[6], n[7])
+            self.conv0 = GCNConv(1, 16, normalize=False, bias=False)
+            # self.conv1 = GCNConv(n[0], n[1], normalize=False, bias=False)
+            # self.conv2 = GCNConv(n[1], n[2], normalize=False, bias=False)
+            # self.conv3 = GCNConv(n[2], n[3], normalize=False, bias=False)
+            # self.conv4 = GCNConv(n[3], n[4], normalize=False, bias=False)
+            self.conv5 = GCNConv(n[4], n[5], normalize=False, bias=False)
+            self.conv6 = GCNConv(n[5], n[6], normalize=False, bias=False)
+            self.conv7 = GCNConv(n[6], n[7], normalize=False, bias=False)
         elif self.conv_type == 'le':
             self.edge_weight_func = Distance(cat = True)
             self.conv1 = LEConv(n[0], n[1], bias=False)
@@ -80,14 +84,20 @@ class GraphRes(torch.nn.Module):
             self.conv6 = PointNetConv(local_nn=Linear(n[5]+3, n[6]), global_nn=Linear(n[6], n[6]))
             self.conv7 = PointNetConv(local_nn=Linear(n[6]+3, n[7]), global_nn=Linear(n[7], n[7]))
         elif self.conv_type == 'pointnet_single':
-            self.conv1 = PointNetConv(local_nn=Linear(n[0]+3, n[1], bias=False), global_nn=None)
-            self.conv2 = PointNetConv(local_nn=Linear(n[1]+3, n[2], bias=False), global_nn=None)
-            self.conv3 = PointNetConv(local_nn=Linear(n[2]+3, n[3], bias=False), global_nn=None)
-            self.conv4 = PointNetConv(local_nn=Linear(n[3]+3, n[4], bias=False), global_nn=None)
-            self.conv5 = PointNetConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None)
-            self.conv6 = PointNetConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None)
-            self.conv7 = PointNetConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None)
-            self.conv8 = PointNetConv(local_nn=Linear(n[7]+3, n[8], bias=False), global_nn=None)
+            self.conv0 = PointNetConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None, add_self_loops=False)
+            # self.conv1 = PointNetConv(local_nn=Linear(n[0]+3, n[1], bias=False), global_nn=None)
+            # self.conv2 = PointNetConv(local_nn=Linear(n[1]+3, n[2], bias=False), global_nn=None)
+            # self.conv3 = PointNetConv(local_nn=Linear(n[2]+3, n[3], bias=False), global_nn=None)
+            # self.conv4 = PointNetConv(local_nn=Linear(n[3]+3, n[4], bias=False), global_nn=None)
+            self.conv5 = PointNetConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None, add_self_loops=False)
+            self.conv6 = PointNetConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None, add_self_loops=False)
+            self.conv7 = PointNetConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None, add_self_loops=False)
+            # self.conv8 = PointNetConv(local_nn=Linear(n[7]+3, n[8], bias=False), global_nn=None)
+        elif self.conv_type == 'my':
+            self.conv0 = MyConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None)
+            self.conv5 = MyConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None)
+            self.conv6 = MyConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None)
+            self.conv7 = MyConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None)
         elif self.conv_type == 'sage':
             self.conv1 = SAGEConv(n[0], n[1])
             self.conv2 = SAGEConv(n[1], n[2])
@@ -201,12 +211,13 @@ class GraphRes(torch.nn.Module):
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
 
 
-        self.norm1 = BatchNorm(in_channels=n[1])
-        self.norm2 = BatchNorm(in_channels=n[2])
+        # self.norm1 = BatchNorm(in_channels=n[1])
+        # self.norm2 = BatchNorm(in_channels=n[2])
 
-        self.norm3 = BatchNorm(in_channels=n[3])
-        self.norm4 = BatchNorm(in_channels=n[4])
+        # self.norm3 = BatchNorm(in_channels=n[3])
+        # self.norm4 = BatchNorm(in_channels=n[4])
 
+        self.norm0 = BatchNorm(in_channels=16)
         self.norm5 = BatchNorm(in_channels=n[5])
         # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False), img_shape=self.input_shape[:2])
 
@@ -219,6 +230,9 @@ class GraphRes(torch.nn.Module):
         pooling_dm_dims = torch.div(self.input_shape[:2], grid_div)
         self.pool7 = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
         self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+        # self.hidden = 128
+        # self.fc1 = Linear(pooling_outputs * num_grids, out_features=self.hidden, bias=False)
+        # self.fc2 = Linear(self.hidden, out_features=num_outputs, bias=False)
 
     def convs(self, layer, data):
         if self.conv_type == 'spline' or self.conv_type == 'gine' or self.conv_type == 'nn' or self.conv_type == 'pdn':
@@ -235,8 +249,8 @@ class GraphRes(torch.nn.Module):
             return layer(data.x, data.edge_index)
         elif self.conv_type == 'le' or self.conv_type == 'graph' or self.conv_type == 'sg_weighted' or self.conv_type == 'gcn_weighted':
             return layer(data.x, data.edge_index, data.edge_weight)
-        elif self.conv_type == 'pointnet' or self.conv_type == 'pointnet_single':
-            return layer(data.x, data.pos, data.edge_index)
+        elif self.conv_type == 'pointnet' or self.conv_type == 'pointnet_single' or self.conv_type == 'my':
+            return layer(x=data.x, pos=data.pos, edge_index=data.edge_index)
         else:
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
 
@@ -259,7 +273,8 @@ class GraphRes(torch.nn.Module):
             or self.conv_type == 'film' \
             or self.conv_type == 'pdn' \
             or self.conv_type == 'gcn_weighted' \
-            or self.conv_type == 'pointnet_single'
+            or self.conv_type == 'pointnet_single' \
+            or self.conv_type == 'my'
             # or self.conv_type == 'gen'
             # or self.conv_type == 'nn'
             # or self.conv_type == 'gine'
@@ -272,10 +287,14 @@ class GraphRes(torch.nn.Module):
         elif self.conv_type == 'gine':
             data = self.edge_weight_func(data)
 
-        data.x = self.convs(self.conv1, data)
-        data.x = self.norm1(data.x)
-        data.x = self.act(data.x)
-        data.x = self.norm2(self.convs(self.conv2, data))
+        # data.x = self.convs(self.conv1, data)
+        # data.x = self.norm1(data.x)
+        # data.x = self.act(data.x)
+        # data.x = self.norm2(self.convs(self.conv2, data))
+        # data.x = self.act(data.x)
+
+        data.x = self.convs(self.conv0, data)
+        data.x = self.norm0(data.x)
         data.x = self.act(data.x)
 
         # x_sc = data.x.clone()
@@ -296,12 +315,15 @@ class GraphRes(torch.nn.Module):
         data.x = self.act(data.x)
         data.x = data.x + x_sc
 
-        # # TODO: sudo-async, only for debug
-        # if hasattr(self.conv1, 'asy_graph'):
-        #     data.pos = self.conv1.asy_graph.pos
-        #     data.batch = None
+        # data.x = self.norm8(self.convs(self.conv8, data))
+        # data.x = self.act(data.x)
 
         x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
+
         x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
         output = self.fc(x)
+
+        # o1 = self.fc1(x)
+        # o1_relu = self.act(o1)
+        # output = self.fc2(o1_relu)
         return output
