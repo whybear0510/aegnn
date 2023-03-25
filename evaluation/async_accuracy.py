@@ -201,6 +201,8 @@ if __name__ == '__main__':
     if args.debug:
         _ = aegnn.utils.loggers.LoggingLogger(None, name="debug")
 
+    torch.set_printoptions(precision=16)
+
     model_eval = torch.load(args.model_file).to(args.device)
     model_eval.eval()
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
