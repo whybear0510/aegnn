@@ -4,6 +4,7 @@ import torch_geometric
 
 from torch_geometric.nn.norm import BatchNorm
 from .base.base import make_asynchronous, add_async_graph
+from .base.utils import graph_changed_nodes, graph_new_nodes
 
 
 def __graph_initialization(module: BatchNorm, x: torch.Tensor) -> torch.Tensor:
@@ -15,7 +16,7 @@ def __graph_initialization(module: BatchNorm, x: torch.Tensor) -> torch.Tensor:
         var = module.module.running_var + module.module.eps
 
     y = ((x - mean) / torch.sqrt(var)) * module.module.weight + module.module.bias
-    module.asy_graph = torch_geometric.data.Data(mean=mean, variance=var)
+    module.asy_graph = torch_geometric.data.Data(x=x, y=y, mean=mean, variance=var)
 
     # If required, compute the flops of the asynchronous update operation.
     # flops computation from https://github.com/sovrasov/flops-counter.pytorch/
@@ -33,13 +34,26 @@ def __graph_processing(module: BatchNorm, x: torch.Tensor) -> torch.Tensor:
     the dense implementation. Therefore, we approximate the distribution with the initial distribution as
     num_new_events << num_initial_events.
     """
-    y = ((x - module.asy_graph.mean) / torch.sqrt(module.asy_graph.variance)) * module.module.weight + module.module.bias
+
+    # Identify the new added idx and changed idx
+    x_new, idx_new = graph_new_nodes(module, x=x)
+    _, idx_diff = graph_changed_nodes(module, x=x)
+    idx_changed = torch.cat([idx_diff, idx_new])
+
+    y = ((x[idx_changed, :] - module.asy_graph.mean) / torch.sqrt(module.asy_graph.variance)) * module.module.weight + module.module.bias
+    out_channels = module.asy_graph.y.size()[-1]
+    module.asy_graph.y = torch.cat([module.asy_graph.y, torch.zeros(x_new.size()[0], out_channels, device=x.device)])
+    module.asy_graph.y[idx_changed, :] = y
+    module.asy_graph.x = x
+
+    # y = ((x - module.asy_graph.mean) / torch.sqrt(module.asy_graph.variance)) * module.module.weight + module.module.bias
 
     # If required, compute the flops of the asynchronous update operation.
     if module.asy_flops_log is not None:
-        flops = int(x.shape[0] * x.shape[1]) * 4
-        module.asy_flops_log.append(flops)
-    return y
+        # flops = int(x.shape[0] * x.shape[1]) * 4
+        # module.asy_flops_log.append(flops)
+        raise NotImplementedError(f'FLOPS for async BN is under designing')
+    return module.asy_graph.y
 
 
 def __check_support(module):
