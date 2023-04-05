@@ -15,6 +15,7 @@ from .base.utils import compute_edges, graph_changed_nodes, graph_new_nodes
 from .flops import compute_flops_conv
 
 from ..models.networks.my_conv import MyConv
+from ..models.networks.my_fuse import MyConvBNReLU
 
 
 def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge_attr=None, **kwargs):
@@ -32,9 +33,7 @@ def __graph_initialization(module, x: torch.Tensor, edge_index: Adj = None, edge
         y = module.sync_forward(x, edge_index=edge_index, edge_attr=edge_attr)
     elif module.conv_type == 'gcn':
         y = module.sync_forward(x, edge_index=edge_index)
-    elif module.conv_type == 'pointnet':
-        y = module.sync_forward(x, pos=pos, edge_index=edge_index)
-    elif module.conv_type == 'my':
+    elif module.conv_type == 'pointnet' or module.conv_type == 'my' or module.conv_type == 'fuse':
         y = module.sync_forward(x, pos=pos, edge_index=edge_index)
     else:
         if edge_attr is None:
@@ -161,39 +160,48 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
     out_channels = module.asy_graph.y.size()[-1]
     y = torch.cat([module.asy_graph.y.clone(), torch.zeros(x_new.size()[0], out_channels, device=x.device)])
     if edge_index.numel() > 0:
-        # # original:
-        # x_j = x_all[edge_index[0, :], :]
-        # if edge_attr is not None:
-        #     phi = module.message(x_j, edge_attr=edge_attr)
-        # else:
-        #     x_j = torch.matmul(x_j, module.weight)
-        #     phi = module.message(x_j, edge_weight=None)
+        if module.conv_type == 'spline':
+            # # original:
+            # x_j = x_all[edge_index[0, :], :]
+            # if edge_attr is not None:
+            #     phi = module.message(x_j, edge_attr=edge_attr)
+            # else:
+            #     x_j = torch.matmul(x_j, module.weight)
+            #     phi = module.message(x_j, edge_weight=None)
 
-        # # Use the internal message passing for feature aggregation.
-        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
-        y_update_test = module.propagate(edge_index, x=x_all, edge_attr=edge_attr, size=None)
-        y_update = y_update_test
+            # # Use the internal message passing for feature aggregation.
+            # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
+            y_update_test = module.propagate(edge_index, x=x_all, edge_attr=edge_attr, size=None)
+            y_update = y_update_test
+        elif module.conv_type == 'pointnet' or module.conv_type == 'my':
+            # # pointnet
+            # x_j = x_all[edge_index[0, :], :]
+            # x_i = x_all[edge_index[1, :], :]
+            # pos_j = pos_all[edge_index[0, :], :]
+            # pos_i = pos_all[edge_index[1, :], :]
+            # phi = module.message(x_j, pos_i=pos_i, pos_j=pos_j)
 
-        # # pointnet
-        # x_j = x_all[edge_index[0, :], :]
-        # x_i = x_all[edge_index[1, :], :]
-        # pos_j = pos_all[edge_index[0, :], :]
-        # pos_i = pos_all[edge_index[1, :], :]
-        # phi = module.message(x_j, pos_i=pos_i, pos_j=pos_j)
+            # # Use the internal message passing for feature aggregation.
+            # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
+            y_update_test = module.propagate(edge_index, x=x_all, pos=pos_all, size=None)
+            y_update = y_update_test
+        elif module.conv_type == 'fuse':
+            # y_update_test = module.propagate(edge_index, x=x_all, pos=pos_all, size=None)
+            from tqdm import tqdm
+            tprint = tqdm.write
+            # tprint(f'now in fuse')
+            y_update_test = module.sync_forward(x=x_all, pos=pos_all, edge_index=edge_index)
+            y_update = y_update_test
+        elif module.conv_type == 'gcn':
+            # gcn
+            x_all_new = module.lin(x_all)
+            x_j = x_all_new[edge_index[0, :], :]
+            x_i = x_all_new[edge_index[1, :], :]
+            phi = module.message(x_j, edge_weight=None)
 
-        # # Use the internal message passing for feature aggregation.
-        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all.size()[0])
-        # y_update_test = module.propagate(edge_index, x=x_all, pos=pos_all, size=None)
-
-        # # gcn
-        # x_all_new = module.lin(x_all)
-        # x_j = x_all_new[edge_index[0, :], :]
-        # x_i = x_all_new[edge_index[1, :], :]
-        # phi = module.message(x_j, edge_weight=None)
-
-        # # Use the internal message passing for feature aggregation.
-        # y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all_new.size()[0])
-        # y_update_test = module.propagate(edge_index, x=x_all_new, edge_weight=None, size=None)
+            # Use the internal message passing for feature aggregation.
+            y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all_new.size()[0])
+            y_update_test = module.propagate(edge_index, x=x_all_new, edge_weight=None, size=None)
 
         all_close = torch.allclose(y_update, y_update_test, atol=1e-5)
         if not all_close:
@@ -284,6 +292,7 @@ def make_conv_asynchronous(module, r: float, edge_attributes=None, is_initial: b
     elif isinstance(module, PointNetConv): module.conv_type = 'pointnet'
     elif isinstance(module, LEConv): module.conv_type = 'le'
     elif isinstance(module, MyConv): module.conv_type = 'my'
+    elif isinstance(module, MyConvBNReLU): module.conv_type = 'fuse'
     else: module.conv_type = 'other'
 
     return make_asynchronous(module, __graph_initialization, __graph_processing)

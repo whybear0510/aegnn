@@ -12,6 +12,7 @@ from torch_geometric.transforms import Cartesian, Distance
 from aegnn.models.layer import MaxPooling, MaxPoolingX
 
 from .my_conv import MyConv
+from .my_fuse import MyConvBNReLU
 
 
 class GraphRes(torch.nn.Module):
@@ -45,6 +46,8 @@ class GraphRes(torch.nn.Module):
         else:
             raise NotImplementedError(f"No model parameters for dataset {dataset}")
 
+        self.fused = False
+        self.quantized = False
 
         self.conv_type = conv_type
 
@@ -94,10 +97,14 @@ class GraphRes(torch.nn.Module):
             self.conv7 = PointNetConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None, add_self_loops=False)
             # self.conv8 = PointNetConv(local_nn=Linear(n[7]+3, n[8], bias=False), global_nn=None)
         elif self.conv_type == 'my':
-            self.conv0 = MyConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None)
-            self.conv5 = MyConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None)
-            self.conv6 = MyConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None)
-            self.conv7 = MyConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None)
+            # self.conv0 = MyConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None)
+            # self.conv5 = MyConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None)
+            # self.conv6 = MyConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None)
+            # self.conv7 = MyConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None)
+            self.conv0 = MyConv(1, 16)
+            self.conv5 = MyConv(n[4], n[5])
+            self.conv6 = MyConv(n[5], n[6])
+            self.conv7 = MyConv(n[6], n[7])
         elif self.conv_type == 'sage':
             self.conv1 = SAGEConv(n[0], n[1])
             self.conv2 = SAGEConv(n[1], n[2])
@@ -207,23 +214,29 @@ class GraphRes(torch.nn.Module):
             self.conv5 = GCNConv(n[4], n[5], normalize=False, bias=False)
             self.conv6 = GCNConv(n[5], n[6], normalize=False, bias=False)
             self.conv7 = GCNConv(n[6], n[7], normalize=False, bias=False)
+
+        if self.conv_type != 'fuse':
+            # self.norm1 = BatchNorm(in_channels=n[1])
+            # self.norm2 = BatchNorm(in_channels=n[2])
+
+            # self.norm3 = BatchNorm(in_channels=n[3])
+            # self.norm4 = BatchNorm(in_channels=n[4])
+
+            self.norm0 = BatchNorm(in_channels=16)
+            self.norm5 = BatchNorm(in_channels=n[5])
+            # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False), img_shape=self.input_shape[:2])
+
+            self.norm6 = BatchNorm(in_channels=n[6])
+            self.norm7 = BatchNorm(in_channels=n[7])
+            self.norm8 = BatchNorm(in_channels=n[8])
+        elif self.conv_type == 'fuse':
+            # print('Fuse mode: conv, bn, relu')
+            self.fuse1 = MyConvBNReLU(1, 16)
+            self.fuse2 = MyConvBNReLU(n[4], n[5])
+            self.fuse3 = MyConvBNReLU(n[5], n[6])
+            self.fuse4 = MyConvBNReLU(n[6], n[7])
         else:
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
-
-
-        # self.norm1 = BatchNorm(in_channels=n[1])
-        # self.norm2 = BatchNorm(in_channels=n[2])
-
-        # self.norm3 = BatchNorm(in_channels=n[3])
-        # self.norm4 = BatchNorm(in_channels=n[4])
-
-        self.norm0 = BatchNorm(in_channels=16)
-        self.norm5 = BatchNorm(in_channels=n[5])
-        # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False), img_shape=self.input_shape[:2])
-
-        self.norm6 = BatchNorm(in_channels=n[6])
-        self.norm7 = BatchNorm(in_channels=n[7])
-        self.norm8 = BatchNorm(in_channels=n[8])
 
         # grid_div = 4  # =1: global_max_pool_x, >1: grid_max_pool_x
         num_grids = grid_div*grid_div
@@ -233,6 +246,9 @@ class GraphRes(torch.nn.Module):
         # self.hidden = 128
         # self.fc1 = Linear(pooling_outputs * num_grids, out_features=self.hidden, bias=False)
         # self.fc2 = Linear(self.hidden, out_features=num_outputs, bias=False)
+
+        self.debug_x = []
+        self.debug_dqx = []
 
     def convs(self, layer, data):
         if self.conv_type == 'spline' or self.conv_type == 'gine' or self.conv_type == 'nn' or self.conv_type == 'pdn':
@@ -254,7 +270,19 @@ class GraphRes(torch.nn.Module):
         else:
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
 
+    def to_fused(self):
+        for module in self.children():
+            if isinstance(module, MyConvBNReLU):
+                module.to_fused()
+        self.fused = True
+        return self
 
+    def quant(self):
+        for module in self.children():
+            if isinstance(module, MyConvBNReLU):
+                module.quant()
+        self.quantized = True
+        return self
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
         assert self.conv_type == 'le' \
@@ -274,7 +302,8 @@ class GraphRes(torch.nn.Module):
             or self.conv_type == 'pdn' \
             or self.conv_type == 'gcn_weighted' \
             or self.conv_type == 'pointnet_single' \
-            or self.conv_type == 'my'
+            or self.conv_type == 'my' \
+            or self.conv_type == 'fuse'
             # or self.conv_type == 'gen'
             # or self.conv_type == 'nn'
             # or self.conv_type == 'gine'
@@ -287,36 +316,48 @@ class GraphRes(torch.nn.Module):
         elif self.conv_type == 'gine':
             data = self.edge_weight_func(data)
 
-        # data.x = self.convs(self.conv1, data)
-        # data.x = self.norm1(data.x)
-        # data.x = self.act(data.x)
-        # data.x = self.norm2(self.convs(self.conv2, data))
-        # data.x = self.act(data.x)
+        if self.conv_type != 'fuse':
+            data.x = self.convs(self.conv0, data)
+            data.x = self.norm0(data.x)
+            data.x = self.act(data.x)
 
-        data.x = self.convs(self.conv0, data)
-        data.x = self.norm0(data.x)
-        data.x = self.act(data.x)
+            data.x = self.norm5(self.convs(self.conv5, data))
+            data.x = self.act(data.x)
 
-        # x_sc = data.x.clone()
-        # data.x = self.norm3(self.convs(self.conv3, data))
-        # data.x = self.act(data.x)
-        # data.x = self.norm4(self.convs(self.conv4, data))
-        # data.x = self.act(data.x)
-        # data.x = data.x + x_sc
+            x_sc = data.x.clone()
+            data.x = self.norm6(self.convs(self.conv6, data))
+            data.x = self.act(data.x)
+            data.x = self.norm7(self.convs(self.conv7, data))
+            data.x = self.act(data.x)
+            data.x = data.x + x_sc
 
-        data.x = self.norm5(self.convs(self.conv5, data))
-        data.x = self.act(data.x)
-        # data = self.pool5(data.x, pos=data.pos, batch=data.batch, edge_index=data.edge_index, return_data_obj=True)
+        elif self.conv_type == 'fuse':
+            if not self.quantized:
+                # print('Fuse mode forward...')
+                self.debug_x0 = (data.x)
+                data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index) # no timestamp
+                self.debug_x1 = (data.x)
+                data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_x2 = (data.x)
+                # x_sc = data.x.clone()
+                data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_x3 = (data.x)
+                data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_x4 = (data.x)
+                # data.x = data.x + x_sc
+            else:
+                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, bit=8, signed=False)
+                self.debug_dqx0 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse1.x_scale))
+                data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_dqx1 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse2.x_scale))
+                data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_dqx2 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse3.x_scale))
+                data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                self.debug_dqx3 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.x_scale))
+                data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
+                self.debug_dqx4 = (data.x)
 
-        x_sc = data.x.clone()
-        data.x = self.norm6(self.convs(self.conv6, data))
-        data.x = self.act(data.x)
-        data.x = self.norm7(self.convs(self.conv7, data))
-        data.x = self.act(data.x)
-        data.x = data.x + x_sc
-
-        # data.x = self.norm8(self.convs(self.conv8, data))
-        # data.x = self.act(data.x)
 
         x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
 

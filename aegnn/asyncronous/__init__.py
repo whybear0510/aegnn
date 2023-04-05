@@ -19,6 +19,7 @@ from aegnn.asyncronous.base.callbacks import CallbackFactory
 import pytorch_lightning as pl
 
 from ..models.networks.my_conv import MyConv
+from ..models.networks.my_fuse import MyConvBNReLU
 
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None,
@@ -70,6 +71,15 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
             callback_keys.append(key)
 
         elif isinstance(nn, MyConv):
+            nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes, is_initial=conv_is_initial, **log_kwargs)
+            conv_is_initial = False
+            callback_keys.append(key)
+
+        elif isinstance(nn, MyConvBNReLU):
+            # nn_layers[key].to_fused()
+            assert nn_layers[key].fused is True
+            assert nn_layers[key].calibre is True
+            assert nn_layers[key].quantized is True
             nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes, is_initial=conv_is_initial, **log_kwargs)
             conv_is_initial = False
             callback_keys.append(key)

@@ -97,7 +97,7 @@ def main(args):
     # log_settings = wandb.Settings(start_method="thread")  # for Windows?
 
     if not args.debug:
-        wandb.init(project="aegnn", entity="yyfteam", name=runs_name)
+        wandb.init(project="aegnn", entity="whybear0510", name=runs_name)
         wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir)
         if args.log_gradients:
             wandb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
@@ -129,6 +129,7 @@ def main(args):
     trainer_kwargs["logger"] = logger
     trainer_kwargs["callbacks"] = callbacks
     trainer_kwargs["auto_lr_find"] = args.auto_lr_find
+    # trainer_kwargs["precision"] = 16
 
     # trainer_kwargs["gpus"] = [args.gpu] if args.gpu is not None else None
     if not args.cpu:
@@ -146,5 +147,5 @@ def main(args):
 
 if __name__ == '__main__':
     arguments = parse_args()
-    pl.seed_everything(arguments.seed)
+    # pl.seed_everything(arguments.seed)
     main(arguments)

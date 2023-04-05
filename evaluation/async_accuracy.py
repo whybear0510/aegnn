@@ -55,9 +55,93 @@ def sample_new_data(sample, nxt_event_idx):
     nxt_event_idx += 1
     return event_new, nxt_event_idx
 
+@torch.no_grad()
+def calibre_quant(model_eval, data_loader, args):
+
+    if isinstance(model_eval, pl.LightningModule):
+        model = model_eval.model
+        model.device =  model_eval.device
+    elif isinstance(model, torch.nn.Module):
+        model = model_eval
+    else:
+        raise TypeError(f'The type of model is {type(model)}, not a `torch.nn.Module` or a `pl.LightningModule`')
+
+    from copy import deepcopy
+    unfused_model = deepcopy(model)
+    unfused_model = unfused_model.to(model_eval.device)
+    unfused_model.eval()
+
+    assert model.fused is False
+    assert model.quantized is False
+    model.to_fused()
+    assert model.fused is True
+    assert model.quantized is False
+
+    model.eval()
+
+    # calibration
+    num_test_samples = 2460
+    unfused_correct = 0
+    fused_correct = 0
+    for i, sample in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
+        torch.cuda.empty_cache()
+        if i==num_test_samples: break
+        # tprint(f"\nSample {i}, file_id {sample.file_id}:")
+
+        sample = sample.to(model.device)
+        tot_nodes = sample.num_nodes
+
+        unfused_test_sample = sample.clone().detach().to(model.device)
+        output_unfused = unfused_model.forward(unfused_test_sample)
+        y_unfused = torch.argmax(output_unfused, dim=-1)
+        # tprint(f'unfused output = {output_unfused}')
+        unfused_hit = torch.allclose(y_unfused, unfused_test_sample.y)
+        if unfused_hit: unfused_correct += 1
+
+        fused_test_sample = sample.clone().detach().to(model.device)
+        output_fused = model.forward(fused_test_sample)
+        y_fused = torch.argmax(output_fused, dim=-1)
+        # tprint(f'  fused output = {output_fused}')
+        fused_hit = torch.allclose(y_fused, fused_test_sample.y)
+        if fused_hit: fused_correct += 1
+
+        # diff = torch.allclose(y_unfused, y_fused)
+        # if diff is not True:
+        #     print(i)
+        #     print(f'unfused output = {output_unfused}')
+        #     print(f'  fused output = {output_fused}')
+    unfused_acc = unfused_correct / num_test_samples
+    fused_acc = fused_correct / num_test_samples
+
+    tprint(f'unfused_acc = {unfused_acc}')
+    tprint(f'fused_acc = {fused_acc}')
+
+    # quantization
+    model.quant()
+    assert model.quantized is True
+
+    # quantization test
+    quant_correct = 0
+    for i, sample in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
+        torch.cuda.empty_cache()
+        if i==num_test_samples: break
+        # tprint(f"\nSample {i}, file_id {sample.file_id}:")
+
+        sample = sample.to(model.device)
+        tot_nodes = sample.num_nodes
+
+        output_quant = model.forward(sample)
+        y_quant = torch.argmax(output_quant, dim=-1)
+        # tprint(f'  quant output = {output_quant}')
+        quant_hit = torch.allclose(y_quant, sample.y)
+        if quant_hit: quant_correct += 1
+    quant_acc = quant_correct / num_test_samples
+    tprint(f'quant_acc = {quant_acc}')
+
+    return model_eval
 
 @torch.no_grad()
-def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: int = None, iter_cnt: int = None) -> float:
+def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cnt: int = None) -> float:
     predss = []
     targets = []
 
@@ -95,7 +179,7 @@ def evaluate(model, data_loader: Iterable[Batch], args, img_size, init_event: in
         sync_test_sample = sample.clone().detach()
         output_sync = sync_model.forward(sync_test_sample)
         y_sync = torch.argmax(output_sync, dim=-1)
-        tprint(f'sync output = {output_sync}')
+        tprint(f' sync output = {output_sync}')
         # sample.y = y_sync  # Debug only: for random sample input
         targets.append(sample.y)
 
@@ -186,7 +270,10 @@ def main(args, model, data_module):
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "async_accuracy")
 
-    data_loader = data_module.val_dataloader(num_workers=16).__iter__()
+    # data_loader = data_module.val_dataloader(num_workers=16).__iter__()
+    data_loader = data_module.val_dataloader(num_workers=16)
+
+    model = calibre_quant(model, data_loader, args)
     accuracy = evaluate(model, data_loader, args=args, img_size=img_size)
     df = pd.concat([df, pd.Series(accuracy)])
     df.to_pickle(output_file+'.pkl')
