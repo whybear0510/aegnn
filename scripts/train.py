@@ -72,6 +72,8 @@ def main(args):
         'batch_size': args.batch_size
     }
 
+    if args.cpu: device = torch.device('cpu')
+    else: device = torch.device('cuda')
     model_args = {
         'network': args.model,
         'dataset': args.dataset,
@@ -89,13 +91,8 @@ def main(args):
 
     model = aegnn.models.by_task(args.task)(**model_args)
 
-    # training the async model (?), copy from flop.py
-    # edge_attr = torch_geometric.transforms.Cartesian(cat=False, max_value=10.0)
-    # model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, list(dm.dims), edge_attr)
-
 
     # log_settings = wandb.Settings(start_method="thread")  # for Windows?
-
     if not args.debug:
         wandb.init(project="aegnn", entity="whybear0510", name=runs_name)
         wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir)
