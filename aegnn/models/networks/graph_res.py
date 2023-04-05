@@ -4,8 +4,8 @@ import torch_geometric
 from torch.nn import Linear
 from torch.nn.functional import elu
 from torch.nn.functional import relu
-from torch_geometric.nn.conv import SplineConv
-from torch_geometric.nn.conv import GCNConv, LEConv, PointNetConv, SAGEConv, GraphConv, GINConv, GINEConv, ARMAConv, SGConv, MFConv, NNConv, EdgeConv, ClusterGCNConv, GENConv, FiLMConv, PDNConv
+from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.nn.conv import SplineConv, GCNConv, LEConv, PointNetConv
 from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.transforms import Cartesian, Distance
 
@@ -170,27 +170,18 @@ class GraphRes(torch.nn.Module):
 
         elif self.conv_type == 'fuse':
             if not self.quantized:
-                self.debug_x0 = (data.x)
                 data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index) # no timestamp
-                self.debug_x1 = (data.x)
                 data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_x2 = (data.x)
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_x3 = (data.x)
                 data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_x4 = (data.x)
             else:
                 data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, bit=8, signed=False)
-                self.debug_dqx0 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse1.x_scale))
                 data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_dqx1 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse2.x_scale))
                 data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_dqx2 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse3.x_scale))
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                self.debug_dqx3 = (MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.x_scale))
                 data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
-                self.debug_dqx4 = (data.x)
+
 
 
         x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
@@ -202,3 +193,25 @@ class GraphRes(torch.nn.Module):
         # o1_relu = self.act(o1)
         # output = self.fc2(o1_relu)
         return output
+
+    def debug_logger(self):
+        self.debug_y = {}
+        self.debug_qy = {}
+        self.debug_dqy = {}
+
+        if self.conv_type == 'fuse':
+                def log(name):
+                    def hook(module, input, output):
+                        if not self.quantized:
+                            self.debug_y[name] = output.detach()
+                        else:
+                            self.debug_qy[name] = output.detach()
+                            self.debug_dqy[name] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.y_scale)
+                    return hook
+
+                for name, module in self.named_children():
+                    if not name.startswith('params'):
+                        if isinstance(module, MessagePassing):
+                            module.register_forward_hook(log(name))
+
+
