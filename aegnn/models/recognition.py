@@ -53,9 +53,16 @@ class RecognitionModel(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
-        # lr_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer,base_lr=(self.lr*0.1),max_lr=(self.lr*2), cycle_momentum=False, mode='triangular2', gamma=0.8, step_size_up=5)
-        # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=40, eta_min=(self.lr*0.1))
         return [optimizer], [lr_scheduler]
+        # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr*2, epochs=100, steps_per_epoch=205, anneal_strategy='cos')
+        # return {
+        #     "optimizer": optimizer,
+        #     "lr_scheduler": {
+        #         "scheduler": lr_scheduler,
+        #         "interval": "step",
+        #         "frequency": 1
+        #     }
+        # }
 
 
 class LRPolicy(object):
@@ -65,6 +72,6 @@ class LRPolicy(object):
             return 1
         elif epoch >= 20 and epoch < 50:
             # return 5e-4
-            return 0.1
+            return 0.5
         else:
-            return 0.05
+            return 0.1
