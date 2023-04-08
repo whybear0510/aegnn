@@ -12,7 +12,7 @@ from torch_geometric.transforms import Cartesian, Distance
 from aegnn.models.layer import MaxPooling, MaxPoolingX
 
 from .my_conv import MyConv
-from .my_fuse import MyConvBNReLU
+from .my_fuse import MyConvBNReLU, qLinear
 
 
 class GraphRes(torch.nn.Module):
@@ -104,7 +104,8 @@ class GraphRes(torch.nn.Module):
         num_grids = grid_div*grid_div
         pooling_dm_dims = torch.div(self.input_shape[:2], grid_div)
         self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
-        self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+        # self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+        self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
         # self.hidden = 128
         # self.fc1 = Linear(pooling_outputs * num_grids, out_features=self.hidden, bias=False)
         # self.fc2 = Linear(self.hidden, out_features=num_outputs, bias=False)
@@ -131,7 +132,7 @@ class GraphRes(torch.nn.Module):
 
     def quant(self):
         for module in self.children():
-            if isinstance(module, MyConvBNReLU):
+            if isinstance(module, MyConvBNReLU) or isinstance(module, qLinear):
                 module.quant()
         self.quantized = True
         return self
@@ -175,19 +176,27 @@ class GraphRes(torch.nn.Module):
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
             else:
-                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, bit=8, signed=False)
+                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, bit=self.fuse1.f_bit, signed=False)
                 data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
+                # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
 
 
 
         x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
 
         x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
-        output = self.fc(x)
+
+        if not self.quantized:
+            output = self.fc(x)
+        else:
+            q_output = self.fc(x)
+            # dq_output = MyConvBNReLU.dequant_tensor(q_output, scale=self.fc.out_scale)
+            # output = dq_output
+            output = q_output
+
 
         # o1 = self.fc1(x)
         # o1_relu = self.act(o1)
@@ -199,19 +208,36 @@ class GraphRes(torch.nn.Module):
         self.debug_qy = {}
         self.debug_dqy = {}
 
-        if self.conv_type == 'fuse':
-                def log(name):
-                    def hook(module, input, output):
-                        if not self.quantized:
-                            self.debug_y[name] = output.detach()
-                        else:
-                            self.debug_qy[name] = output.detach()
-                            self.debug_dqy[name] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.y_scale)
-                    return hook
+        self.debug_fc = {}
 
-                for name, module in self.named_children():
-                    if not name.startswith('params'):
-                        if isinstance(module, MessagePassing):
-                            module.register_forward_hook(log(name))
+        if self.conv_type == 'fuse':
+            def log_y(name):
+                def hook(module, input, output):
+                    if not self.quantized:
+                        self.debug_y[name] = output.detach()
+                    else:
+                        self.debug_qy[name] = output.detach()
+                        self.debug_dqy[name] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.y_scale)
+                return hook
+
+            def log_io():
+                def hook(module, input, output):
+                    if not self.quantized:
+                        self.debug_fc['in'] = input[0].detach()
+                        self.debug_fc['out'] = output.detach()
+                    else:
+                        self.debug_fc['qin'] = input[0].detach()
+                        self.debug_fc['dqin'] = MyConvBNReLU.dequant_tensor(input[0].detach(), scale=module.in_scale)
+                        self.debug_qy['qout'] = output.detach()
+                        self.debug_dqy['dqout'] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.out_scale)
+                return hook
+
+
+            for name, module in self.named_children():
+                if not name.startswith('params'):
+                    if isinstance(module, MessagePassing):
+                        module.register_forward_hook(log_y(name))
+                    if isinstance(module, qLinear):
+                        module.register_forward_hook(log_io())
 
 

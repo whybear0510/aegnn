@@ -70,41 +70,64 @@ class MyConvBNReLU(MessagePassing):
         self.local_nn.weight = torch.nn.Parameter(self.local_nn.weight * self.w_new.view(-1,1))
         self.fused = True
 
-    def get_quant_params(self):
+    def get_quant_params(self, f_bit, w_bit):
         assert self.training is False
         if self.fused is False: self.to_fused()
         assert self.fused is True
 
         # x: uint8
         qx_min = 0
-        qx_max = pow(2, 8) - 1
+        qx_max = 2**(f_bit) - 1
 
         # y: uint8
         qy_min = 0
-        qy_max = pow(2, 8) - 1
+        qy_max = 2**(f_bit) - 1
 
         # w: int8
-        qw_max = pow(2, 7) - 1
+        qw_max = 2**(w_bit-1) - 1
         qw_min = -qw_max
 
 
-        # TODO: "3.0" is the max of abs(pos_i - pos_j); maybe need to trans args.radius
-        x_max = torch.maximum(self.obs_x.max_val, torch.tensor(3.0, device=self.obs_x.max_val.device))
+        # # TODO: "3.0" is the max of abs(pos_i - pos_j); maybe need to trans args.radius
+        # x_max = torch.maximum(self.obs_x.max_val, torch.tensor(3.0, device=self.obs_x.max_val.device))
+        # self.x_scale = x_max / qx_max
+
+        # y_max = torch.maximum(self.obs_y.max_val, torch.tensor(3.0, device=self.obs_y.max_val.device))
+        # self.y_scale = y_max / qy_max
+
+        # w_max = torch.max(self.obs_w.max_val)
+        # w_min = torch.min(self.obs_w.min_val)
+        # w_abs_max = torch.maximum(torch.abs(w_max), torch.abs(w_min))
+        # self.w_scale = 2 * w_abs_max / (qw_max - qw_min)
+
+        # self.dpos_scale = 1/torch.round(1/self.x_scale)
+
+        # self.b_scale = self.x_scale * self.w_scale
+
+        # self.M = (self.w_scale * self.x_scale) / self.y_scale
+
+
+        x_max = self.obs_x.max_val
         self.x_scale = x_max / qx_max
 
-        y_max = torch.maximum(self.obs_y.max_val, torch.tensor(3.0, device=self.obs_y.max_val.device))
+        y_max = self.obs_y.max_val
         self.y_scale = y_max / qy_max
 
-        w_max = torch.max(self.obs_w.max_val)
-        w_min = torch.min(self.obs_w.min_val)
-        w_abs_max = torch.maximum(torch.abs(w_max), torch.abs(w_min))
-        self.w_scale = 2 * w_abs_max / (qw_max - qw_min)
+        wx_max = torch.max(self.obs_w.max_val[:-self.pos_dim])
+        wx_min = torch.min(self.obs_w.min_val[:-self.pos_dim])
+        wx_abs_max = torch.maximum(torch.abs(wx_max), torch.abs(wx_min))
+        self.wx_scale = 2 * wx_abs_max / (qw_max - qw_min)
 
-        self.dpos_scale = 1/torch.round(1/self.x_scale)
+        wpos_pseudo_max = wx_abs_max * x_max
+        self.wpos_scale = 2 * wpos_pseudo_max / (qw_max - qw_min)
 
-        self.b_scale = self.x_scale * self.w_scale
+        self.dpos_scale = 4.0 / (2**(f_bit+2)-1)
 
-        self.M = (self.w_scale * self.x_scale) / self.y_scale
+        self.b_scale = self.x_scale * self.wx_scale
+
+        self.M = (self.wx_scale * self.x_scale) / self.y_scale
+
+
 
         self.NM = 20 # 20bit shifting
         self.m  = torch.round(self.M * 2**(self.NM))
@@ -133,14 +156,24 @@ class MyConvBNReLU(MessagePassing):
 
     def quant(self):
         assert self.calibre is True
-        self.get_quant_params()
+        self.f_bit = 8
+        self.w_bit = 8
+        self.b_bit = 32
+
+        self.get_quant_params(self.f_bit, self.w_bit)
+
+        # self.w_real = self.local_nn.weight.clone().detach()
+        # self.w_quant = self.quant_tensor(self.w_real, scale=self.w_scale, bit=self.w_bit, signed=True)
+        # self.local_nn.weight = torch.nn.Parameter(self.w_quant)
 
         self.w_real = self.local_nn.weight.clone().detach()
-        self.w_quant = self.quant_tensor(self.w_real, scale=self.w_scale, bit=8, signed=True)
+        self.wx_quant = self.quant_tensor(self.w_real[:,:-self.pos_dim], scale=self.wx_scale, bit=self.w_bit, signed=True)
+        self.wpos_quant = self.quant_tensor(self.w_real[:,-self.pos_dim:], scale=self.wpos_scale, bit=self.w_bit, signed=True)
+        self.w_quant = torch.cat([self.wx_quant, self.wpos_quant], dim=1)
         self.local_nn.weight = torch.nn.Parameter(self.w_quant)
 
         self.b_real = self.b_new.clone().detach()
-        self.b_quant = self.quant_tensor(self.b_real, scale=self.b_scale, bit=32, signed=True)
+        self.b_quant = self.quant_tensor(self.b_real, scale=self.b_scale, bit=self.b_bit, signed=True)
 
         self.quantized = True
         pass
@@ -189,10 +222,83 @@ class MyConvBNReLU(MessagePassing):
             cat = torch.cat([x_j, dpos], dim=1)
             msg = self.local_nn(cat)
         else:
-
-            dpos = self.quant_tensor(dpos, scale=self.dpos_scale, bit=8, signed=False)
+            # dpos = self.quant_tensor(dpos, scale=self.dpos_scale, bit=self.f_bit, signed=False)
+            dpos = self.quant_tensor(dpos, scale=self.dpos_scale, bit=self.f_bit+2, signed=False)
             cat = torch.cat([x_j, dpos], dim=1)
             msg = self.local_nn(cat)
 
         return msg
+
+
+
+class qLinear(torch.nn.Module):
+    def __init__(self, in_features: int, out_features: int, bias: bool = False):
+        super().__init__()
+
+        self.in_features = in_features
+        self.out_features = out_features
+        self.bias = bias
+        self.lin = torch.nn.Linear(self.in_features, self.out_features, self.bias)
+
+        self.calibre = False
+        self.quantized = False
+
+        self.f_bit = 8
+        self.w_bit = 8
+        self.b_bit = 32
+
+        self.obs_in = MinMaxObserver(dtype=torch.quint8, qscheme=torch.per_tensor_affine)
+        self.obs_out = MinMaxObserver(dtype=torch.qint8, qscheme=torch.per_tensor_symmetric)
+        self.obs_w = MinMaxObserver(dtype=torch.qint8, qscheme=torch.per_tensor_symmetric)
+        # no bias for now
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        reset(self.lin)
+
+    def get_quant_params(self, f_bit, w_bit):
+        assert self.training is False
+
+        self.in_scale,_ = self.obs_in.calculate_qparams()
+        self.out_scale,_ = self.obs_out.calculate_qparams()
+        self.w_scale,_ = self.obs_w.calculate_qparams()
+
+        self.b_scale = self.in_scale * self.w_scale
+
+        self.M = (self.in_scale * self.w_scale) / self.out_scale
+
+        self.NM = 20 # 20bit shifting
+        self.m  = torch.round(self.M * 2**(self.NM))
+
+    def quant(self):
+        assert self.calibre is True
+
+        self.get_quant_params(self.f_bit, self.w_bit)
+
+        self.w_real = self.lin.weight.clone().detach()
+        self.w_quant = MyConvBNReLU.quant_tensor(self.w_real, scale=self.w_scale, bit=self.w_bit, signed=True)
+        self.lin.weight = torch.nn.Parameter(self.w_quant)
+
+        if self.bias:
+            self.b_real = self.lin.bias.clone().detach()
+            self.b_quant = MyConvBNReLU.quant_tensor(self.b_real, scale=self.b_scale, bit=self.b_bit, signed=True)
+            self.lin.bias = torch.nn.Parameter(self.b_quant)
+
+        self.quantized = True
+
+    def forward(self, x: torch.Tensor) -> Tensor:
+
+        if not self.quantized:
+            self.obs_in(x)
+            out = self.lin(x)
+            self.obs_out(out)
+            self.obs_w(self.lin.weight)
+
+            self.calibre = True
+        else:
+            assert self.calibre is True
+            out = self.lin(x) * self.m
+            out = torch.round(out * (2**(-self.NM)))  # pure shifting
+
+        return out
 
