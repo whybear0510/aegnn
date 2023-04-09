@@ -19,6 +19,8 @@ from torch_geometric.utils import add_self_loops, remove_self_loops
 from torch_geometric.nn.norm import BatchNorm
 from torch.nn.functional import relu
 
+from aegnn.utils import Qtype
+
 
 class MyConvBNReLU(MessagePassing):
 
