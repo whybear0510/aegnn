@@ -11,7 +11,7 @@ from torch_geometric.utils import to_undirected, degree
 from torch_geometric.nn.conv import GCNConv, LEConv, PointNetConv, SplineConv
 
 from .base.base import make_asynchronous, add_async_graph
-from .base.utils import compute_edges, graph_changed_nodes, graph_new_nodes
+from .base.utils import compute_edges, graph_changed_nodes, graph_new_nodes, cdist
 from .flops import compute_flops_conv
 
 from ..models.networks.my_conv import MyConv
@@ -97,8 +97,10 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
 
     logging.debug(f"Subgraph contains {idx_new.numel()} new and {idx_diff.numel()} diff nodes")
     # node_distance = torch.cdist(pos_all, pos_new)  # for PyTorch >= 1.13.0
-    node_distance = (pos_all-pos_new).pow(2).sum(1).sqrt().view(-1,1)
-    connected_node_mask = node_distance <= module.asy_radius
+    # node_distance = (pos_all-pos_new).pow(2).sum(1).sqrt().view(-1,1)
+    node_distance = cdist(pos_all, pos_new, p=1).view(-1,1)
+    eps = 1e-5
+    connected_node_mask = node_distance <= (module.asy_radius + eps)
     connected_node_mask[-1, :] = False  # remove self loop
 
     full_neighbors_idx = (module.available_neighbors[:pos_all.shape[0]] <= 0).nonzero()
@@ -203,10 +205,12 @@ def __graph_processing(module, x: torch.Tensor, edge_index = None, edge_attr: to
             y_update = module.aggregate(phi, index=edge_index[1, :], ptr=None, dim_size=x_all_new.size()[0])
             y_update_test = module.propagate(edge_index, x=x_all_new, edge_weight=None, size=None)
 
-        all_close = torch.allclose(y_update, y_update_test, atol=1e-5)
-        if not all_close:
-            where_close = torch.isclose(y_update, y_update_test)
-            where_c = torch.nonzero(~where_close)
+        # all_close = torch.allclose(y_update, y_update_test, atol=1e-5)
+        # if not all_close:
+        #     where_close = torch.isclose(y_update, y_update_test)
+        #     where_c = torch.nonzero(~where_close)
+
+
         # Concat old and updated feature for output feature vector.
         y[idx_update] = y_update_test[idx_update]
     logging.debug(f"Updated {idx_update.numel()} nodes in asy. graph of module {module}")
