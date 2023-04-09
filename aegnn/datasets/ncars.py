@@ -42,7 +42,7 @@ class NCars(NCaltech101):
         params = self.hparams.preprocessing
 
         # Re-weight temporal vs. spatial dimensions to account for different resolutions.
-        data.pos[:, 2] = normalize_time(data.pos[:, 2])
+        # data.pos[:, 2] = normalize_time(data.pos[:, 2]) # comment out = beta==1
         # data = data.to('cuda')
 
         # Coarsen graph by uniformly sampling n points from the event point cloud.

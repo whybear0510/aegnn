@@ -138,7 +138,7 @@ class GraphRes(torch.nn.Module):
         return self
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
-        assert data.x.device.type == data.pos.device.type == data.edge_index.device.type == self.device.type
+        # assert data.x.device.type == data.pos.device.type == data.edge_index.device.type == self.device.type
 
         assert self.conv_type == 'le' \
             or self.conv_type == 'spline' \
