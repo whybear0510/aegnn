@@ -14,6 +14,8 @@ from aegnn.models.layer import MaxPooling, MaxPoolingX
 from .my_conv import MyConv
 from .my_fuse import MyConvBNReLU, qLinear
 
+from aegnn.utils import Qtype
+
 
 class GraphRes(torch.nn.Module):
 
@@ -130,10 +132,12 @@ class GraphRes(torch.nn.Module):
         self.fused = True
         return self
 
-    def quant(self):
+    def quant(self,*,conv_f_dtype='uint8', conv_w_dtype='int8', fc_in_dtype='uint8', fc_w_dtype='int8', fc_out_dtype='int8'):
         for module in self.children():
-            if isinstance(module, MyConvBNReLU) or isinstance(module, qLinear):
-                module.quant()
+            if isinstance(module, MyConvBNReLU):
+                module.quant(f_dtype=conv_f_dtype, w_dtype=conv_w_dtype)
+            elif isinstance(module, qLinear):
+                module.quant(in_dtype=fc_in_dtype, w_dtype=fc_w_dtype, out_dtype=fc_out_dtype)
         self.quantized = True
         return self
 
@@ -176,7 +180,7 @@ class GraphRes(torch.nn.Module):
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
             else:
-                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, bit=self.fuse1.f_bit, signed=False)
+                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
                 data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
                 data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
@@ -228,8 +232,8 @@ class GraphRes(torch.nn.Module):
                     else:
                         self.debug_fc['qin'] = input[0].detach()
                         self.debug_fc['dqin'] = MyConvBNReLU.dequant_tensor(input[0].detach(), scale=module.in_scale)
-                        self.debug_qy['qout'] = output.detach()
-                        self.debug_dqy['dqout'] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.out_scale)
+                        self.debug_fc['qout'] = output.detach()
+                        self.debug_fc['dqout'] = MyConvBNReLU.dequant_tensor(output.detach(), scale=module.out_scale)
                 return hook
 
 

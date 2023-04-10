@@ -7,11 +7,23 @@ import aegnn.utils.loggers
 
 
 class Qtype():
-    def __init__(self, dtype: str) -> None:
-        self.dtype = dtype
-        self._bit, self._signed, self._format = Qtype.convert_dtype(self.dtype)
-        self._min, self._max = self.get_range()
+    def __init__(self, dtype: str = None, *, bit: int = None, signed: bool = None) -> None:
+        if dtype is not None:
+            self.dtype = dtype
+            self._bit, self._signed, self._format = Qtype.convert_dtype(self.dtype)
+            self._min, self._max = self.get_range()
+        elif bit is not None and signed is not None:
+            self._bit = bit
+            self._signed = signed
+            self._format = 'int'
+            self._min, self._max = self.get_range()
+        else:
+            raise ValueError(f'Init Error: Missing "dtype" or "bit with signed"')
 
+    def __repr__(self) -> str:
+        prefix = '' if self._signed else 'u'
+        dtype_name = prefix + self._format + str(self._bit)
+        return dtype_name
 
     @staticmethod
     def convert_dtype(dtype: str):
