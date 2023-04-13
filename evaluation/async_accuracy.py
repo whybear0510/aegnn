@@ -188,7 +188,7 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
 
 
         init_num_event = 2
-        # init_num_event = tot_nodes - 0
+        # init_num_event = tot_nodes - 2
 
         sub_predss = []
 
@@ -221,6 +221,13 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
                 pbar.update(1)
                 if INT: break
         tprint(f'async output = {output_new}')
+
+        # debug: statistic
+        num_g_idx_max = 0
+        for g in async_model.model.pool.asy_graph.idx_group:
+            if g.shape[0] > num_g_idx_max:
+                num_g_idx_max = g.shape[0]
+        tprint(f'num_g_idx_max = {num_g_idx_max}')
 
         # Test if graphs are the same
         # aegnn_graph = async_model.model.conv1.asy_graph
