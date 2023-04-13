@@ -58,7 +58,7 @@ cmd_cpresult = f'python get_latest_results.py'
 # eg: CUDA_VISIBLE_DEVICES=1 python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device cuda --dataset ncars --batch-size 64 --fast-test
 cmd_accuracy = f'CUDA_VISIBLE_DEVICES={which_gpu} python ../evaluation/accuracy_per_events.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt --device {device} --dataset {dataset} --batch-size {batch_size} --fast-test'
 
-# eg: CUDA_VISIBLE_DEVICES=2 python3 ../evaluation/async_accuracy.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230408223030/epoch=99-step=20299.pt --device cuda --dataset ncars --batch-size 1 --test-samples 100
+# eg: CUDA_VISIBLE_DEVICES=7 python3 ../evaluation/async_accuracy.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230409231150/epoch=99-step=20299.pt --device cuda --dataset ncars --batch-size 1 --test-samples 600
 
 # eg: CUDA_VISIBLE_DEVICES=3 python3 ../scripts/preprocessing.py --dataset ncars --num-workers 8
 
