@@ -103,8 +103,10 @@ class GraphRes(torch.nn.Module):
             raise ValueError(f"Unkown convolution type: {self.conv_type}")
 
         # grid_div = 4  # =1: global_max_pool_x, >1: grid_max_pool_x
-        num_grids = grid_div*grid_div
-        pooling_dm_dims = torch.div(self.input_shape[:2], grid_div)
+        # num_grids = grid_div*grid_div
+        # pooling_dm_dims = torch.div(self.input_shape[:2], grid_div)
+        num_grids = 8*7
+        pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
         self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
         # self.fc = Linear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
         self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
