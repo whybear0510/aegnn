@@ -26,11 +26,24 @@ def graph_new_nodes(module, x: torch.Tensor) -> Tuple[torch.Tensor, torch.LongTe
 def compute_edges(module, pos: torch.Tensor) -> torch.LongTensor:
     return radius_graph(pos, r=module.asy_radius, max_num_neighbors=pos.size()[0])
 
+def cdist(x1: torch.Tensor, x2: torch.Tensor, p: float = 2.0):
+    if torch.__version__ >= '1.13.0':
+        d = torch.cdist(x1, x2, p=p)
+    else: # "torch.cdist" may contain bugs for pytorch version < 1.13.0
+        if p == 2:
+            d = (x1-x2).pow(2).sum(1).sqrt().view(1,-1)
+        elif p == 1:
+            d = (x1-x2).abs().sum(1).view(1,-1)
+        elif p == float('inf'):
+            raise ValueError('Not impl inf norm for now')
+    return d
+
 def pos_dist(pos: torch.Tensor) -> torch.Tensor:
     num_nodes = pos.shape[0]
     node_distance = []
     for i in range(num_nodes):
-        d = (pos-pos[i, :]).pow(2).sum(1).sqrt().view(1,-1)
+        # d = (pos-pos[i, :]).pow(2).sum(1).sqrt().view(1,-1)
+        d = cdist(pos, pos[i, :], p=1)
         node_distance.append(d)
     node_distances = torch.cat(node_distance, dim=0)
     return node_distances
@@ -57,7 +70,8 @@ def causal_radius_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int
     # calculate collection distance
     # dist_table = torch.cdist(pos, pos, p=2) # for PyTorch >= 1.13.0
     dist_table = pos_dist(pos)
-    connection_mask = dist_table <= r
+    eps = 1e-5
+    connection_mask = dist_table <= (r + eps)
     connection_mask = connection_mask.to(device)
 
     edges_new_list = []

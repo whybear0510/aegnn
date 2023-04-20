@@ -48,6 +48,13 @@ def __graph_processing(module: MaxPoolingX, x: torch.Tensor, pos: torch.Tensor, 
         max, _ = torch.max(x[idx_selected,:], dim=0)
         module.asy_graph.y[g, :] = max
 
+    # # Simplified method. Note: it is NOT a math restrict method
+    # for g in grid_changed:
+    #     former_max = module.asy_graph.y[g, :]
+    #     changed_max,_ = torch.max(x[idx_changed, :], dim=0)
+    #     new_max = torch.maximum(former_max, changed_max)
+    #     module.asy_graph.y[g, :] = new_max
+
     # Update x
     module.asy_graph.x = x
 
