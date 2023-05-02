@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import pytorch_lightning.loggers
 import wandb
 import yaml
-
+import numpy as np
 import aegnn
 import torch_geometric
 import torch
@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument("model", type=str, help="Model name to train.")
     parser.add_argument("--task", type=str, required=True, help="Task to perform, such as detection or recognition.")
     parser.add_argument("--dim", type=int, help="Dimensionality of input data", default=3)
-    parser.add_argument("--seed", default=12345, type=int)
+    parser.add_argument("--seed", default=None, type=int)
 
     group = parser.add_argument_group("Trainer")
     group.add_argument("--max-epochs", default=100, type=int)
@@ -41,6 +41,10 @@ def parse_args():
     parser.add_argument("--grid-div", default=4, type=int)
     parser.add_argument("--conv-type", default='spline', type=str)
     parser.add_argument("--auto-lr-find", action="store_true")
+    parser.add_argument("--distill", action="store_true")
+    parser.add_argument("--teacher-model-path", type=str, default=None)
+    parser.add_argument("--distill-t", default=1.0, type=float)
+    parser.add_argument("--distill-alpha", default=0.75, type=float)
 
     #copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
@@ -51,7 +55,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(args):
+def main(args, seed):
 
     log_dir = os.environ["AEGNN_LOG_DIR"]
     loggers = [aegnn.utils.loggers.LoggingLogger(None if args.debug else log_dir, name="debug")]
@@ -61,6 +65,9 @@ def main(args):
         runs_name = f'lr{args.init_lr}_{args.conv_type}_{experiment_name}'
     else:
         runs_name = f'lr{args.init_lr}_{args.conv_type}_{args.run_name}_{experiment_name}'
+
+    if args.distill:
+        runs_name = 'Distill_' + runs_name
 
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
@@ -86,7 +93,11 @@ def main(args):
         'root_weight': True,
         'act': args.act,
         'grid_div': args.grid_div,
-        'conv_type': args.conv_type
+        'conv_type': args.conv_type,
+        'distill': args.distill,
+        'teacher_model_path': args.teacher_model_path,
+        'distill_t': args.distill_t,
+        'distill_alpha': args.distill_alpha
     }
 
     model = aegnn.models.by_task(args.task)(**model_args)
@@ -96,6 +107,7 @@ def main(args):
     if not args.debug:
         wandb.init(project="aegnn", entity="whybear0510", name=runs_name)
         wandb_logger = pl.loggers.WandbLogger(project=project, save_dir=log_dir)
+        wandb_logger.experiment.config["random_seed"] = seed
         if args.log_gradients:
             wandb_logger.watch(model, log="gradients")  # gradients plot every 100 training batches
         loggers.append(wandb_logger)
@@ -143,6 +155,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    arguments = parse_args()
-    # pl.seed_everything(arguments.seed)
-    main(arguments)
+    args = parse_args()
+    seed = np.random.randint(65535, size=1).item() if args.seed is None else args.seed
+    pl.seed_everything(seed)
+    main(args, seed)

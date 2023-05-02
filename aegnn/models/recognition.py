@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import torch_geometric
 import pytorch_lightning as pl
 import torchmetrics.functional as pl_metrics
@@ -11,16 +12,34 @@ from .networks import by_name as model_by_name
 class RecognitionModel(pl.LightningModule):
 
     def __init__(self, network, dataset: str, num_classes, img_shape: Tuple[int, int],
-                 dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, **model_kwargs):
+                 dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, distill: bool = False, teacher_model_path: str = None, distill_t: float = 1., distill_alpha: float = 0.75, **model_kwargs):
         super(RecognitionModel, self).__init__()
         self.lr = learning_rate
         self.weight_decay = weight_decay
         self.criterion = torch.nn.CrossEntropyLoss()
         self.num_outputs = num_classes
         self.dim = dim
+        self.distill = distill
 
         model_input_shape = torch.tensor(img_shape + (dim, ), device=self.device)
-        self.model = model_by_name(network)(dataset, model_input_shape, num_outputs=num_classes, **model_kwargs)
+        self.model = model_by_name(network)(dataset, model_input_shape, num_outputs=num_classes, distill=self.distill, **model_kwargs)
+
+        if self.distill:
+            if getattr(self, 'character', None) is None:
+                self.character = 'student'
+                if teacher_model_path is None:
+                    raise ValueError('Distillation needs a trained teacher model path')
+                self.teacher_model = torch.load(teacher_model_path)
+                if not hasattr(self.teacher_model, 'distill'):
+                    self.teacher_model.distill = 'False'
+                    self.teacher_model.model.distill = 'False'
+                    self.teacher_model.model.character = 'teacher'
+
+            assert self.character == 'student'
+            self.distill_t = distill_t
+            self.distill_alpha = distill_alpha
+            self.distill_criterion = torch.nn.KLDivLoss()
+
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
         # data.pos = data.pos[:, :self.dim]
@@ -31,12 +50,37 @@ class RecognitionModel(pl.LightningModule):
     # Steps #######################################################################################
     ###############################################################################################
     def training_step(self, batch: torch_geometric.data.Batch, batch_idx: int) -> torch.Tensor:
-        outputs = self.forward(data=batch)
-        loss = self.criterion(outputs, target=batch.y)
+        if not self.distill:
+            assert self.model.character == 'teacher'
+            outputs = self.forward(data=batch)
+            loss = self.criterion(outputs, target=batch.y)
 
-        y_prediction = torch.argmax(outputs, dim=-1)
-        accuracy = pl_metrics.accuracy(preds=y_prediction, target=batch.y)
-        self.logger.log_metrics({"Train/Loss": loss, "Train/Accuracy": accuracy}, step=self.trainer.global_step)
+            y_prediction = torch.argmax(outputs, dim=-1)
+            accuracy = pl_metrics.accuracy(preds=y_prediction, target=batch.y)
+            self.logger.log_metrics({"Train/Loss": loss, "Train/Accuracy": accuracy}, step=self.trainer.global_step)
+
+        else:
+            assert self.model.character == 'student'
+            teacher_batch = batch.clone().detach()
+
+            student_outputs = self.forward(data=batch)
+            student_target_loss = self.criterion(student_outputs, target=batch.y)
+            y_prediction = torch.argmax(student_outputs, dim=-1)
+            accuracy = pl_metrics.accuracy(preds=y_prediction, target=batch.y)
+
+            with torch.no_grad():
+                self.teacher_model.eval()
+                assert self.teacher_model.model.training is False
+                teacher_outputs = self.teacher_model.forward(data=teacher_batch)
+
+            distill_loss = self.distill_criterion(
+                F.log_softmax(student_outputs / self.distill_t, dim=1),
+                F.softmax(teacher_outputs / self.distill_t, dim=1)
+            )
+
+            loss = (1 - self.distill_alpha) * student_target_loss + self.distill_alpha * distill_loss
+
+            self.logger.log_metrics({"Train/Loss": loss, "Train/Accuracy": accuracy}, step=self.trainer.global_step)
         return loss
 
     def validation_step(self, batch: torch_geometric.data.Batch, batch_idx: int) -> torch.Tensor:

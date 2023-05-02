@@ -11,8 +11,13 @@ command:
   - "ncars"
   - "--dim"
   - "3"
+  - "--conv-type"
+  - "fuse"
+  - "--distill"
+  - "--teacher-model-path"
+  - "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420224023/epoch=99-step=20299.pt"
   - "--run-name"
-  - "lastmaxp"
+  - "fuse16_16_maxp"
   - ${args}
 metric:
   goal: maximize
@@ -23,7 +28,7 @@ parameters:
   min-epochs:
     value: 35
   init-lr:
-    values: [0.001, 0.0025, 0.005]
+    value: 0.001
   batch-size:
     value: 64
   weight-decay:
@@ -31,5 +36,8 @@ parameters:
   act:
     value: "relu"
   grid-div:
-    values: [4, 8, 16, 32, 64]
-
+    value: 8
+  distill-t:
+    values: [0.1, 0.5, 1.0, 1.5, 2.0]
+  distill-alpha:
+    values: [0.5, 0.75, 0.9, 0.95]

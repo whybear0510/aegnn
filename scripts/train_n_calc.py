@@ -50,6 +50,9 @@ conv_type = 'gcn'
 #      }
 # }
 
+# eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name teacher_fuse16_16_maxp
+# eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name fuse16_16_maxp --distill --teacher-model-path /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420224023/epoch=99-step=20299.pt --distill-t 2 --distill-alpha 0.95
+
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --grid-div 8 --conv-type pointnet_single --auto-lr-find --run-name cycliclr_auto_find
 # eg: CUDA_VISIBLE_DEVICES=6 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --grid-div 8 --conv-type sage --run-name sage
 cmd_train = f'CUDA_VISIBLE_DEVICES={which_gpu} python3 ../scripts/train.py {model} --task {task} --dataset {dataset} --batch-size {batch_size} --dim {dim} --max-epochs {max_epochs} --init-lr {init_lr} --weight-decay {w_decay} --act {act} --grid-div {grid_div} --conv-type {conv_type} {run_name}'
