@@ -38,12 +38,12 @@ def cdist(x1: torch.Tensor, x2: torch.Tensor, p: float = 2.0):
             raise ValueError('Not impl inf norm for now')
     return d
 
+# Return a table containing p-norm distance of each pair of points (symmetric table)
 def pos_dist(pos: torch.Tensor) -> torch.Tensor:
     num_nodes = pos.shape[0]
     node_distance = []
     for i in range(num_nodes):
-        # d = (pos-pos[i, :]).pow(2).sum(1).sqrt().view(1,-1)
-        d = cdist(pos, pos[i, :], p=1)
+        d = cdist(pos, pos[i, :], p=1) # L1 norm
         node_distance.append(d)
     node_distances = torch.cat(node_distance, dim=0)
     return node_distances
@@ -101,6 +101,49 @@ def causal_radius_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int
 
     edges_new = torch.cat(edges_new_list, dim=1)
     # edges_new = to_undirected(edges_new)
+    edge_index = edges_new.detach().clone().to('cpu')
+
+    return edge_index
+
+
+@torch.no_grad()
+def hugnet_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int = 32) -> torch.LongTensor:
+    # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    torch.cuda.empty_cache()
+    pos = data_pos.clone().detach()
+    pos = pos.to('cuda')
+
+    device = pos.device
+    num_nodes = pos.shape[0]
+
+    # calculate collection distance
+    dist_table = pos_dist(pos)
+    dist_table = dist_table.to(device)
+
+    # select upper triangle of the dist table
+    self_loops = False
+    tril_idx = torch.tril_indices(*dist_table.shape, offset=-int(self_loops))
+    dist_table[tril_idx[0,:],tril_idx[1,:]] = float('inf')
+
+    # sort dist to find its nearest neighbors idx. any point containing dist > r will not be connected and will be regarded as a virtual point with neg idx waiting to be filtered
+    sorted_dist_table, index = dist_table.sort(0)
+    neighbor_idx = index
+    eps = 1e-5
+    neighbor_idx[sorted_dist_table > (r+eps)] = -1
+
+    edges_new_list = []
+    for i in range(num_nodes):
+        col = neighbor_idx[:max_num_neighbors, i]
+
+        # neg idx means that will not connect and be filtered
+        idx_src = col[col>=0]
+        idx_dst = (i * torch.ones_like(idx_src, device=device)).to(torch.long)
+
+        # HUGNet: ONLY directed edges (past -> now)
+        edge_new = torch.stack([idx_src, idx_dst])
+        edges_new_list.append(edge_new)
+
+    edges_new = torch.cat(edges_new_list, dim=1)
     edge_index = edges_new.detach().clone().to('cpu')
 
     return edge_index
