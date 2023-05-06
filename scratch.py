@@ -1,110 +1,74 @@
 import torch
-import torch_geometric
-import pytorch_lightning as pl
-# import pytorch_lightning.metrics.functional as pl_metrics
-import torchmetrics.functional as pl_metrics
-import numpy as np
-
-from torch.nn.functional import softmax
-from typing import Tuple
-from tqdm import tqdm
 import aegnn
+import torch_geometric
+from torch_geometric.data import Data
+from torch_geometric.utils import to_undirected, degree
+from aegnn.asyncronous.base.utils import hugnet_graph
+from aegnn.models.networks.my_fuse import MyConvBNReLU
+from aegnn.asyncronous import make_model_asynchronous
+import pytorch_lightning as pl
+# pl.seed_everything(123)
+num_nodes = 100
+r = 3.0
+max_num_neighbors = 32
 
-# import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '4'
+data_pos = torch.rand(num_nodes,3) *128
+data_pos[:, :2] = data_pos[:, :2].round()
+data_pos[:, 2],_ = data_pos[:, 2].sort()
+data_pos[:, 2] *= 1e-6
+# print(data_pos)
 
+edge_index = hugnet_graph(data_pos, r=r, max_num_neighbors=max_num_neighbors)
+# print(edge_index)
 
+x = (torch.rand(num_nodes,1)).round()
+# print(x)
 
+data = Data(x=x, pos=data_pos, edge_index=edge_index)
 
+class Test(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.device = torch.device('cpu')
 
-batches = [1,64]
-compare_preds=[]
-compare_y=[]
-compare_load=[]
-ass=[]
-debugs=[]
-multiple = int(batches[-1]/batches[0])
+        self.net1 = MyConvBNReLU(1,16)
+        self.net1.eval()
 
-for j, batch_size in enumerate(batches):
-    predss=[]
-    yss=[]
-    def validation_step(self, batch: torch_geometric.data.Batch, batch_idx: int) -> torch.Tensor:
-        
-        self.eval()
-        # outputs,debug = self.forward(data=batch)
-        outputs = self.forward(data=batch)
-        debug=None
-        y_prediction = torch.argmax(outputs, dim=-1)
+        # self.net1.local_nn.weight = torch.nn.Parameter(torch.tensor([[1,0,0],[0,1,0],[0,0,1],[1,1,1]], dtype=torch.float))
 
-        acc = pl_metrics.accuracy(preds=y_prediction, target=batch.y)
+        self.net1.bn.module.running_mean = (torch.rand_like(self.net1.bn.module.running_mean))
+        self.net1.bn.module.running_var = (torch.rand_like(self.net1.bn.module.running_var))
+        self.net1.bn.module.weight = torch.nn.Parameter(torch.rand_like(self.net1.bn.module.weight))
+        self.net1.bn.module.bias = torch.nn.Parameter(torch.rand_like(self.net1.bn.module.bias))
 
-        # print(y_prediction)
-        # print(batch.y)
-        # print(torch.abs(y_prediction-batch.y))
-        predss.append(y_prediction)
-        yss.append(batch.y)
-
-        return acc, debug
-
-
-    model_file = '/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20221125084923/epoch=99-step=20299.pt'
-    self = torch.load(model_file).to(torch.device('cuda'))
-    # dm = aegnn.datasets.by_name('ncars')(batch_size = batch_size, num_workers=0, shuffle=False)
-    dm = aegnn.datasets.by_name('ncars')(batch_size = 1, num_workers=0, shuffle=False)
-    dm.setup()
-    dm_acc = []
-    times = 128//(batch_size)-1
-    
-
-    # for i,batch in tqdm(enumerate(dm.val_dataloader())):
-    #     batch = batch.to(self.device)
-    #     ass.append(batch.x) 
-    #     dm_acc.append(validation_step(self, batch, i)) 
-    #     if i==(times): break
-
-    for i,sample in enumerate(tqdm(dm.val_dataloader())):
-        if i==(1): break
-    batch = torch_geometric.data.Batch.from_data_list([sample for x in range(batch_size)])
-    # compare_load.append(batch.x.detach().cpu().numpy())
-    batch = batch.to(self.device)
-    val_acc, debug = validation_step(self, batch, i)
-    debugs.append(debug)
+        self.net1.to_fused()
 
 
-# load_1 = np.concatenate([compare_load[0] for i in range(batches[-1])], axis=0)
-# load_bs = compare_load[1]
-# print((load_1==load_bs).all())
-# print('load')
+        self.net2 = MyConvBNReLU(16,32)
+        self.net2.eval()
 
-debug_1 = np.concatenate([debugs[0] for i in range(multiple)], axis=0)
-debug_bs = debugs[1]
-diff = debug_1 - debug_bs
-print(np.where(debug_1!=debug_bs))
-print(np.sum(np.abs(diff)))
-print('debug')
+        self.net2.bn.module.running_mean = (torch.rand_like(self.net2.bn.module.running_mean))
+        self.net2.bn.module.running_var = (torch.rand_like(self.net2.bn.module.running_var))
+        self.net2.bn.module.weight = torch.nn.Parameter(torch.rand_like(self.net2.bn.module.weight))
+        self.net2.bn.module.bias = torch.nn.Parameter(torch.rand_like(self.net2.bn.module.bias))
 
+        self.net2.to_fused()
 
+    def forward(self, data):
+        out1 = self.net1(x=data.x, pos=data.pos, edge_index=data.edge_index)
+        out2 = self.net2(x=out1, pos=data.pos, edge_index=data.edge_index)
+        return out2
 
-    # tensor_preds = torch.cat(predss, dim=-1)
-    # tensor_ys = torch.cat(yss, dim=-1)
+model = Test()
+with torch.no_grad():
+    sync_out = model(data)
 
+async_model = make_model_asynchronous(model, r=r, max_num_neighbors=max_num_neighbors)
 
-#     acc_tensor = torch.tensor(dm_acc, dtype=torch.double)
-#     tot_acc = torch.mean(acc_tensor)
-#     print(tot_acc.item())
-#     compare_preds.append(tensor_preds)
-#     compare_y.append(tensor_ys)
+from tqdm import tqdm
+for idx in tqdm(range(data.num_nodes)):
 
-
-# tensor_ass_16 = torch.cat(ass[:8], dim=0)
-# tensor_ass_128 = ass[8]
-
-# diff = tensor_ass_16 - tensor_ass_128
-# print(tensor_ass_16 - tensor_ass_128)
-# print(torch.sum(torch.abs(diff)))
-
-# diff_preds = compare_preds[3] - compare_preds[4]
-# diff_y = compare_y[3] - compare_y[4]
-# print(f'preds:{diff_preds}')
-# print(f'ys={diff_y}')
-
+    x_new = data.x[idx, :].view(1, -1)
+    pos_new = data.pos[idx, :3].view(1, -1)
+    event_new = Data(x=x_new, pos=pos_new, batch=torch.zeros(1, dtype=torch.long))
+    async_out = async_model(event_new)
