@@ -80,7 +80,7 @@ def calibre_quant(model_eval, data_loader, args):
     model.eval()
 
     # calibration
-    num_test_samples = 2460
+    num_test_samples = len(data_loader)
     unfused_correct = 0
     fused_correct = 0
     for i, sample in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
@@ -152,7 +152,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
     sync_model = sync_model.to(model.device)
     sync_model.eval()
 
-    async_model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, img_size, edge_attr)
+    # async_model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, img_size, edge_attr)
+    async_model = aegnn.asyncronous.make_model_asynchronous(model, r=args.radius, max_num_neighbors=args.max_num_neighbors)
     async_model.eval()
 
     df = pd.DataFrame()
@@ -187,47 +188,53 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
         aegnn.asyncronous.register_sync_graph(async_model, sample) #TODO: for debug
 
 
-        init_num_event = 2
+        # init_num_event = 2
         # init_num_event = tot_nodes - 2
 
         sub_predss = []
 
-        events_initial, nxt_event_idx = sample_initial_data(sample, init_num_event, args.radius, edge_attr, args.max_num_neighbors)
-        while nxt_event_idx < tot_nodes:
-            if events_initial.edge_index.numel() > 0:
-                break
-            else:
-                sub_predss.append(torch.tensor([0.], device=model.device))
-                events_initial, nxt_event_idx = sample_initial_data(sample, nxt_event_idx+1, args.radius, edge_attr, args.max_num_neighbors)
-        tprint(f'1st edge starts from node {nxt_event_idx}; former predictions default to 0.0')
+        # events_initial, nxt_event_idx = sample_initial_data(sample, init_num_event, args.radius, edge_attr, args.max_num_neighbors)
+        # while nxt_event_idx < tot_nodes:
+        #     if events_initial.edge_index.numel() > 0:
+        #         break
+        #     else:
+        #         sub_predss.append(torch.tensor([0.], device=model.device))
+        #         events_initial, nxt_event_idx = sample_initial_data(sample, nxt_event_idx+1, args.radius, edge_attr, args.max_num_neighbors)
+        # tprint(f'1st edge starts from node {nxt_event_idx}; former predictions default to 0.0')
 
-        # init stage
-        output_new = async_model.forward(events_initial)
-        y_init = torch.argmax(output_new, dim=-1)
-        sub_predss.append(y_init)
+        # # init stage
+        # output_new = async_model.forward(events_initial)
+        # y_init = torch.argmax(output_new, dim=-1)
+        # sub_predss.append(y_init)
 
-        # iterative adding nodes stage
-        with tqdm(total=(tot_nodes-nxt_event_idx), position=0, leave=False, desc='Events') as pbar:
-            while nxt_event_idx < tot_nodes:
-                torch.cuda.empty_cache()
+        # # iterative adding nodes stage
+        # with tqdm(total=(tot_nodes-nxt_event_idx), position=0, leave=False, desc='Events') as pbar:
+        #     while nxt_event_idx < tot_nodes:
+        #         torch.cuda.empty_cache()
 
-                event_new, nxt_event_idx = sample_new_data(sample, nxt_event_idx)
-                event_new = event_new.to(model.device)
+        #         event_new, nxt_event_idx = sample_new_data(sample, nxt_event_idx)
+        #         event_new = event_new.to(model.device)
 
-                output_new = async_model.forward(event_new)
-                y_new = torch.argmax(output_new, dim=-1)
+        #         output_new = async_model.forward(event_new)
+        #         y_new = torch.argmax(output_new, dim=-1)
 
-                sub_predss.append(y_new)
-                pbar.update(1)
-                if INT: break
-        tprint(f'async output = {output_new}')
+        #         sub_predss.append(y_new)
+        #         pbar.update(1)
+        #         if INT: break
+        # tprint(f'async output = {output_new}')
 
-        # debug: statistic
-        num_g_idx_max = 0
-        for g in async_model.model.pool.asy_graph.idx_group:
-            if g.shape[0] > num_g_idx_max:
-                num_g_idx_max = g.shape[0]
-        tprint(f'num_g_idx_max = {num_g_idx_max}')
+        for idx in tqdm(range(tot_nodes), position=0, leave=False, desc='Events'):
+            torch.cuda.empty_cache()
+            x_new = sample.x[idx, :].view(1, -1)
+            pos_new = sample.pos[idx, :3].view(1, -1)
+            event_new = Data(x=x_new, pos=pos_new, batch=torch.zeros(1, dtype=torch.long))
+            event_new = event_new.to(model.device)
+            output_async = async_model(event_new)
+            y_async = torch.argmax(output_async, dim=-1)
+            sub_predss.append(y_async)
+            if INT: break
+        tprint(f'async output = {output_async}')
+
 
         # Test if graphs are the same
         # aegnn_graph = async_model.model.conv1.asy_graph

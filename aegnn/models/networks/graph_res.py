@@ -246,16 +246,16 @@ class GraphRes(torch.nn.Module):
             assert self.conv_type == 'fuse'
 
             if not self.quantized:
-                data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index) # no timestamp
-                data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index) # no timestamp
+                data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
             else:
                 data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
-                data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
                 # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
 
             x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)

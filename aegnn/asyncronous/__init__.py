@@ -169,6 +169,8 @@ def reset_async_module(module):
     else:
         raise TypeError(f'The type of module is {type(module)}, not a `torch.nn.Module` or a `pl.LightningModule`')
 
+    module.asy_graph.pos = torch.tensor([], device=module.device).reshape(0,3)
+    module.asy_graph.edge_index = torch.tensor([], device=module.device, dtype=torch.long).reshape(2,0)
 
     for key, nn in nn_layers.items():
 
