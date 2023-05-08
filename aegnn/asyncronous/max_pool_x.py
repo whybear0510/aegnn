@@ -14,49 +14,25 @@ def __graph_initialization(module: MaxPoolingX, x: torch.Tensor, pos: torch.Tens
 
     y, cluster = module.sync_forward(x, pos, batch)
 
-    # List all nodes idx that belong to certain grid
-    idx_group = [torch.tensor([], device=x.device, dtype=torch.long) for i in range(module.size)]
-    for i, c in enumerate(cluster):
-        idx_group[c] = torch.cat([idx_group[c], torch.tensor([i], device=x.device, dtype=torch.long)])
-
-    module.asy_graph = torch_geometric.data.Data(x=x.clone(), pos=pos, y=y, idx_group=idx_group)
+    module.asy_graph = torch_geometric.data.Data(x=x.clone(), pos=pos, y=y)
 
     return module.asy_graph.y, cluster
 
 
 def __graph_processing(module: MaxPoolingX, x: torch.Tensor, pos: torch.Tensor, batch: Optional[torch.Tensor] = None) -> torch.Tensor:
-    # Update pos with new added pos
-    module.asy_graph.pos = pos_all = torch.cat([module.asy_graph.pos, pos], dim=0)
 
-    # Identify the new added idx and changed idx
-    _, idx_new = graph_new_nodes(module, x=x)
-    _, idx_diff = graph_changed_nodes(module, x=x)
-    idx_changed = torch.cat([idx_diff, idx_new])
+    module.asy_graph.x = torch.cat([module.asy_graph.x, x], dim=0)
 
-    # Get new nodes' cluster, add them into idx_group
-    cluster_new = fixed_voxel_grid(pos, full_shape=module.full_shape, size=module.voxel_size, batch=None)
-    module.asy_graph.idx_group[cluster_new] = torch.cat([module.asy_graph.idx_group[cluster_new], idx_new])
+    pos_all = module.pos_all[:, :2]
+    pos_new = pos # also == module.pos_new[:, :2]
+    idx_new = torch.tensor([module.idx_new], device=x.device)
+    cluster_new = fixed_voxel_grid(pos_new, full_shape=module.full_shape, size=module.voxel_size, batch=None)
 
-    # Find the changed nodes' location in the grids, record the grids
-    pos_changed = pos_all[idx_changed]
-    cluster_changed = fixed_voxel_grid(pos_changed, full_shape=module.full_shape, size=module.voxel_size, batch=None)
-    grid_changed = torch.unique(cluster_changed)
-
-    # For each grid that contains changed nodes, get nodes' idx, find their x according to x, do the max(), then update y
-    for g in grid_changed:
-        idx_selected = module.asy_graph.idx_group[g]
-        max, _ = torch.max(x[idx_selected,:], dim=0)
-        module.asy_graph.y[g, :] = max
-
-    # # Simplified method. Note: it is NOT a math restrict method
-    # for g in grid_changed:
-    #     former_max = module.asy_graph.y[g, :]
-    #     changed_max,_ = torch.max(x[idx_changed, :], dim=0)
-    #     new_max = torch.maximum(former_max, changed_max)
-    #     module.asy_graph.y[g, :] = new_max
-
-    # Update x
-    module.asy_graph.x = x
+    old_max_x = module.asy_graph.y[cluster_new, :]
+    new_x = x
+    new_max_x = torch.maximum(old_max_x, new_x)
+    module.asy_graph.y[cluster_new, :] = new_max_x
+    cluster_changed = cluster_new
 
     return module.asy_graph.y, cluster_changed
 
