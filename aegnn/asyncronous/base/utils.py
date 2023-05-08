@@ -26,6 +26,26 @@ def graph_new_nodes(module, x: torch.Tensor) -> Tuple[torch.Tensor, torch.LongTe
 def compute_edges(module, pos: torch.Tensor) -> torch.LongTensor:
     return radius_graph(pos, r=module.asy_radius, max_num_neighbors=pos.size()[0])
 
+def find_new_edges(idx_new, pos_new, pos_all, r = 3.0, max_num_neighbors = 32, self_loops = False):
+    # calculate collection dist
+    node_distance = cdist(pos_all, pos_new, p=1).view(-1,1)
+    node_distance[-1, :] = 0.0 if self_loops else float('inf')
+
+    # sort dist to find its nearest neighbors idx. any point containing dist > r will not be connected and will be regarded as a virtual point with neg idx waiting to be filtered
+    sorted_dist, index = node_distance.sort(0)
+    neighbor_idx = index
+    eps = 1e-5
+    neighbor_idx[sorted_dist > (r+eps)] = -1
+    neighbor_idx = neighbor_idx[:max_num_neighbors, :]
+
+    # neg idx means that will not connect and be filtered
+    idx_src = neighbor_idx[neighbor_idx>=0]
+    idx_dst = (idx_new * torch.ones_like(idx_src, device=pos_new.device)).to(torch.long)
+
+    # HUGNet: ONLY directed edges (past -> now)
+    edge_new = torch.stack([idx_src, idx_dst])
+    return edge_new
+
 def cdist(x1: torch.Tensor, x2: torch.Tensor, p: float = 2.0):
     if torch.__version__ >= '1.13.0':
         d = torch.cdist(x1, x2, p=p)

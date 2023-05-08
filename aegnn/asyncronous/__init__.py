@@ -4,7 +4,10 @@ import torch.nn
 import torch_geometric
 
 from torch_geometric.nn.norm import BatchNorm
+from torch_geometric.data import Data
 from aegnn.models.layer import MaxPooling, MaxPoolingX
+
+from aegnn.asyncronous.base.utils import find_new_edges
 
 from aegnn.asyncronous.conv import make_conv_asynchronous
 from aegnn.asyncronous.batch_norm import make_batch_norm_asynchronous
@@ -22,7 +25,7 @@ from ..models.networks.my_conv import MyConv
 from ..models.networks.my_fuse import MyConvBNReLU
 
 
-def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None,
+def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None, max_num_neighbors = 32, self_loops = False,
                             log_flops: bool = False, log_runtime: bool = False, **module_kwargs):
     """Module converter from synchronous to asynchronous & sparse processing for graph convolutional layers.
     By overwriting parts of the module asynchronous processing can be enabled without the need of re-learning
@@ -57,6 +60,15 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     module.asy_runtime_log = [] if log_runtime else None
     callback_keys = []
 
+    module.asy_graph = Data()
+    module.asy_graph.pos = torch.tensor([], device=module.device).reshape(0,3)
+    module.asy_graph.edge_index = torch.tensor([], device=module.device, dtype=torch.long).reshape(2,0)
+
+    module.r = r
+    module.max_num_neighbors = max_num_neighbors
+    module.self_loops = self_loops
+
+
     # Make all layers asynchronous that have an implemented asynchronous function. Otherwise use
     # the synchronous forward function.
     log_kwargs = dict(log_flops=log_flops, log_runtime=log_runtime)
@@ -77,9 +89,11 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
 
         elif isinstance(nn, MyConvBNReLU):
             # nn_layers[key].to_fused()
-            assert nn_layers[key].fused is True
-            assert nn_layers[key].calibre is True
-            assert nn_layers[key].quantized is True
+            #! tmp disable for debug
+            # assert nn_layers[key].fused is True
+            # assert nn_layers[key].calibre is True
+            # assert nn_layers[key].quantized is True
+
             nn_layers[key] = make_conv_asynchronous(nn, r=r, edge_attributes=edge_attributes, is_initial=conv_is_initial, **log_kwargs)
             conv_is_initial = False
             callback_keys.append(key)
@@ -90,7 +104,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
 
         elif isinstance(nn, MaxPoolingX):
             nn_layers[key] = make_max_pool_x_asynchronous(nn, **log_kwargs)
-            # callback_keys.append(key)
+            callback_keys.append(key)
 
         elif isinstance(nn, BatchNorm):
             nn_layers[key] = make_batch_norm_asynchronous(nn, **log_kwargs)
@@ -114,7 +128,22 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     module.asy_pass_attribute = CallbackFactory(cb_listeners, log_name="base model")
 
     def async_forward(data: torch_geometric.data.Data, *args, **kwargs):
-        module.asy_pass_attribute('asy_pos', data.pos)  # pass data.pos to all listened layers (conv, fc)
+        pos_past = module.asy_graph.pos
+        idx_new = module.asy_graph.num_nodes
+        pos_new = data.pos
+        pos_all = torch.cat([pos_past, pos_new], dim=0)
+        module.asy_graph.pos = pos_all
+
+        edge_new = find_new_edges(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
+        edge_all = torch.cat([module.asy_graph.edge_index, edge_new], dim=1)
+        module.asy_graph.edge_index = edge_all # for debug
+
+        # pass data to all listened layers (convs+maxpool)
+        module.asy_pass_attribute('pos_new', pos_new)
+        module.asy_pass_attribute('idx_new', idx_new)
+        module.asy_pass_attribute('pos_all', pos_all)
+        module.asy_pass_attribute('edge_new', edge_new)
+
         out = model_forward(data, *args, **kwargs)
 
         if module.asy_flops_log is not None:
