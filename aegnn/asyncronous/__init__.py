@@ -7,7 +7,7 @@ from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.data import Data
 from aegnn.models.layer import MaxPooling, MaxPoolingX
 
-from aegnn.asyncronous.base.utils import find_new_edges
+from aegnn.asyncronous.base.utils import find_new_edges, find_new_edges_cylinder
 
 from aegnn.asyncronous.conv import make_conv_asynchronous
 from aegnn.asyncronous.batch_norm import make_batch_norm_asynchronous
@@ -134,7 +134,8 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
         pos_all = torch.cat([pos_past, pos_new], dim=0)
         module.asy_graph.pos = pos_all
 
-        edge_new = find_new_edges(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
+        # edge_new = find_new_edges(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
+        edge_new = find_new_edges_cylinder(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
         edge_all = torch.cat([module.asy_graph.edge_index, edge_new], dim=1)
         module.asy_graph.edge_index = edge_all # for debug
 
