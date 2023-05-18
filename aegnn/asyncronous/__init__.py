@@ -26,7 +26,7 @@ from ..models.networks.my_fuse import MyConvBNReLU
 
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None, max_num_neighbors = 32, self_loops = False,
-                            log_flops: bool = False, log_runtime: bool = False, **module_kwargs):
+                            log_flops: bool = False, log_runtime: bool = False, max_dt: int = 65535, **module_kwargs):
     """Module converter from synchronous to asynchronous & sparse processing for graph convolutional layers.
     By overwriting parts of the module asynchronous processing can be enabled without the need of re-learning
     and moving its weights and configuration. So, a convolutional layer can be converted by, for example:
@@ -67,6 +67,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
     module.r = r
     module.max_num_neighbors = max_num_neighbors
     module.self_loops = self_loops
+    module.max_dt = max_dt
 
 
     # Make all layers asynchronous that have an implemented asynchronous function. Otherwise use
@@ -135,7 +136,7 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
         module.asy_graph.pos = pos_all
 
         # edge_new = find_new_edges(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
-        edge_new = find_new_edges_cylinder(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops)
+        edge_new = find_new_edges_cylinder(idx_new, pos_new, pos_all, r=module.r, max_num_neighbors=module.max_num_neighbors, self_loops=module.self_loops, max_dt=module.max_dt)
         edge_all = torch.cat([module.asy_graph.edge_index, edge_new], dim=1)
         module.asy_graph.edge_index = edge_all # for debug
 

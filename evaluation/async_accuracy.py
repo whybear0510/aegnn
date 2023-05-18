@@ -35,7 +35,7 @@ def parse_args():
 
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
     parser.add_argument("--max-num-neighbors", default=32, help="max. number of neighbors in graph")
-    parser.add_argument("--pooling-size", default=(12, 10))
+    parser.add_argument("--max-dt", default=65535)
 
     parser = aegnn.datasets.EventDataModule.add_argparse_args(parser)
     return parser.parse_args()
@@ -153,7 +153,7 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
     sync_model.eval()
 
     # async_model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, img_size, edge_attr)
-    async_model = aegnn.asyncronous.make_model_asynchronous(model, r=args.radius, max_num_neighbors=args.max_num_neighbors)
+    async_model = aegnn.asyncronous.make_model_asynchronous(model, r=args.radius, max_num_neighbors=args.max_num_neighbors, max_dt=args.max_dt)
     async_model.eval()
 
     df = pd.DataFrame()
@@ -308,6 +308,10 @@ if __name__ == '__main__':
     model_eval.eval()
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.setup()
+
+    args.max_num_neighbors = dm.hparams.preprocessing['d_max']
+    args.radius = dm.hparams.preprocessing['r']
+    args.max_dt = dm.hparams.preprocessing['max_dt']
 
     signal.signal(signal.SIGINT, signal_handler)
     INT = False

@@ -50,6 +50,7 @@ conv_type = 'gcn'
 #      }
 # }
 
+# eg: CUDA_VISIBLE_DEVICES=6 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --max-num-neighbors 16 --conv-type fuse --run-name teacher_maxd16_maxdt65535
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name teacher_fuse16_16_maxp
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name fuse16_16_maxp --distill --teacher-model-path /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420224023/epoch=99-step=20299.pt --distill-t 2 --distill-alpha 0.95
 
@@ -65,7 +66,9 @@ cmd_accuracy = f'CUDA_VISIBLE_DEVICES={which_gpu} python ../evaluation/accuracy_
 
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../evaluation/async_accuracy.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230510023907/epoch=99-step=20199.pt --device cuda --dataset ncars --batch-size 1 --test-samples 400
 
-# eg: CUDA_VISIBLE_DEVICES=3 python3 ../scripts/preprocessing.py --dataset ncars --num-workers 8
+# eg: CUDA_VISIBLE_DEVICES=6 python3 ../evaluation/async_accuracy.py /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230518004217/epoch=99-step=20199.pt --device cuda --dataset ncars --batch-size 1 --max-num-neighbors 16 --test-samples 600
+
+# eg: CUDA_VISIBLE_DEVICES=3 python3 ../scripts/preprocessing.py --dataset ncars --num-workers 2 --run-name cylinder_maxd_16_maxdt_65535
 
 cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy)
 os.system(cmd)

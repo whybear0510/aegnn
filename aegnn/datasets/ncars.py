@@ -18,7 +18,7 @@ class NCars(NCaltech101):
                  transform: Optional[Callable[[Data], Data]] = None):
         super(NCars, self).__init__(batch_size, shuffle, num_workers, pin_memory=pin_memory, transform=transform)
         self.dims = (120, 100)  # overwrite image shape
-        pre_processing_params = {"r": 3.0, "d_max": 32, "n_samples": 10000, "sampling": True}
+        pre_processing_params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": True, "max_dt": 65535}
         self.save_hyperparameters({"preprocessing": pre_processing_params})
 
     def read_annotations(self, raw_file: str) -> Optional[np.ndarray]:
@@ -56,7 +56,7 @@ class NCars(NCaltech101):
 
         torch.cuda.empty_cache()
         data.pos[:, 2] = torch.round(data.pos[:, 2] * 1e6) # change back to unit us
-        data.edge_index = hugnet_graph_cylinder(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
+        data.edge_index = hugnet_graph_cylinder(data.pos, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"])
 
         return data
 

@@ -1,6 +1,8 @@
 import argparse
 import pytorch_lightning as pl
 import torch
+import os
+import datetime
 
 import aegnn
 
@@ -10,6 +12,7 @@ def parse_args():
     parser.add_argument("--seed", default=12345, type=int)
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--gpu", default=None, type=int)
+    parser.add_argument("--run-name", default=None, type=str)
     parser = aegnn.datasets.EventDataModule.add_argparse_args(parser)
     return parser.parse_args()
 
@@ -28,3 +31,14 @@ if __name__ == '__main__':
 
     dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
     dm.prepare_data()
+
+    experiment_name = datetime.datetime.now().strftime("%Y%m%d")
+    run_name = experiment_name if args.run_name is None else args.run_name
+
+    processed_dir = os.path.join(dm.root, "processed")
+    processed_dir_with_name = processed_dir + '_' + run_name
+
+    os.rename(processed_dir, processed_dir_with_name)
+    os.symlink(processed_dir_with_name, processed_dir)
+
+
