@@ -140,6 +140,97 @@ def calibre_quant(model_eval, data_loader, args):
 
     return model_eval
 
+def fprint_params(async_model):
+
+    i_qscale_reverse = (1 / async_model.model.fuse1.x_scale)  # 8bit
+    i_qscale_reverse = torch.round(i_qscale_reverse).item()
+    dpos_qscale_reverse = (1 / async_model.model.fuse1.dpos_scale)  # 10bit
+    dpos_qscale_reverse = round(dpos_qscale_reverse)
+    # async_model.model.fusex.NM === 20
+    L1_w = async_model.model.fuse1.local_nn.weight.T.tolist() # [16,3]
+    L1_b = async_model.model.fuse1.b_quant.T.tolist()  # [16]
+    L1_m = async_model.model.fuse1.m.item()
+
+    L2_w = async_model.model.fuse2.local_nn.weight.T.tolist() # [32,18]
+    L2_b = async_model.model.fuse2.b_quant.T.tolist()  # [32]
+    L2_m = async_model.model.fuse2.m.item()
+
+    L3_w = async_model.model.fuse3.local_nn.weight.T.tolist() # [32,34]
+    L3_b = async_model.model.fuse3.b_quant.T.tolist()  # [32]
+    L3_m = async_model.model.fuse3.m.item()
+
+    L4_w = async_model.model.fuse4.local_nn.weight.T.tolist() # [32,34]
+    L4_b = async_model.model.fuse4.b_quant.T.tolist()  # [32]
+    L4_m = async_model.model.fuse4.m.item()
+
+    fc_w = async_model.model.fc.lin.weight.T.tolist()  # shape [2, 56*32]
+
+    params_dir = '/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/params/'
+    params_txt = params_dir + 'params.txt'
+    with open(params_txt, 'w') as f:
+        f.write(f'i_qscale_reverse: {i_qscale_reverse}\n')
+        f.write(f'dpos_qscale_reverse: {dpos_qscale_reverse}\n')
+
+        f.write(f'L1:\n')
+        f.write(f'm: {L1_m}\n')
+        f.write(f'w:\n')
+        for i in L1_w:
+            for j in i:
+                f.write(f'{int(j)}\t')
+            f.write('\n')
+        f.write(f'b:\n')
+        for i in L1_b:
+            f.write(f'{int(i)}\n')
+        f.write('')
+
+
+        f.write(f'L2:\n')
+        f.write(f'm: {L2_m}\n')
+        f.write(f'w:\n')
+        for i in L2_w:
+            for j in i:
+                f.write(f'{int(j)}\t')
+            f.write('\n')
+        f.write(f'b:\n')
+        for i in L2_b:
+            f.write(f'{int(i)}\n')
+        f.write('')
+
+        f.write(f'L3:\n')
+        f.write(f'm: {L3_m}\n')
+        f.write(f'w:\n')
+        for i in L3_w:
+            for j in i:
+                f.write(f'{int(j)}\t')
+            f.write('\n')
+        f.write(f'b:\n')
+        for i in L3_b:
+            f.write(f'{int(i)}\n')
+        f.write('')
+
+        f.write(f'L4:\n')
+        f.write(f'm: {L4_m}\n')
+        f.write(f'w:\n')
+        for i in L4_w:
+            for j in i:
+                f.write(f'{int(j)}\t')
+            f.write('\n')
+        f.write(f'b:\n')
+        for i in L4_b:
+            f.write(f'{int(i)}\n')
+        f.write('')
+
+        f.write(f'fc:\n')
+        f.write(f'w:\n')
+        for i in fc_w:
+            for j in i:
+                f.write(f'{int(j)}\t')
+            f.write('\n')
+
+    tprint(f'params are recorded into {params_txt}')
+
+
+
 @torch.no_grad()
 def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cnt: int = None) -> float:
     predss = []
@@ -155,6 +246,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
     # async_model = aegnn.asyncronous.make_model_asynchronous(model, args.radius, img_size, edge_attr)
     async_model = aegnn.asyncronous.make_model_asynchronous(model, r=args.radius, max_num_neighbors=args.max_num_neighbors, max_dt=args.max_dt)
     async_model.eval()
+
+    fprint_params(async_model)
 
     df = pd.DataFrame()
     output_file = '/users/yyang22/thesis/aegnn_project/aegnn_results/mid_result'
