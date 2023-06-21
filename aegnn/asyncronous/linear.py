@@ -4,14 +4,17 @@ import torch_geometric
 
 from torch.nn import Linear
 from .base.base import make_asynchronous, add_async_graph
+from ..models.networks.my_fuse import MyConvBNReLU, qLinear
 
 
-def __graph_initialization(module: Linear, x: torch.Tensor) -> torch.Tensor:
+def __graph_initialization(module: qLinear, x: torch.Tensor) -> torch.Tensor:
     bias = getattr(module, 'bias', None)
-    if bias is not None:
-        y = x @ module.weight.T + bias
+    if bias is None:
+        y = x @ module.lin.weight.T
+    elif bias is False:
+        y = x @ module.lin.weight.T
     else:
-        y = x @ module.weight.T
+        y = x @ module.lin.weight.T + bias
 
     module.asy_graph = torch_geometric.data.Data(x=x.clone(), y=y)
 
@@ -23,11 +26,11 @@ def __graph_initialization(module: Linear, x: torch.Tensor) -> torch.Tensor:
     return module.asy_graph.y
 
 
-def __graph_processing(module: Linear, x: torch.Tensor) -> torch.Tensor:
+def __graph_processing(module: qLinear, x: torch.Tensor) -> torch.Tensor:
     diff_idx = (torch.nonzero(x - module.asy_graph.x).T)[1,:]
     if diff_idx.numel() > 0:
         x_diff = x[:, diff_idx] - module.asy_graph.x[:, diff_idx]
-        partial_w = module.weight[:, diff_idx]
+        partial_w = module.lin.weight[:, diff_idx]
         y_diff = x_diff @ partial_w.T
 
         # Update the graph with the new values (only there where it has changed).
@@ -43,11 +46,11 @@ def __graph_processing(module: Linear, x: torch.Tensor) -> torch.Tensor:
     return module.asy_graph.y
 
 
-def __check_support(module: Linear):
+def __check_support(module: qLinear):
     return True
 
 
-def make_linear_asynchronous(module: Linear, log_flops: bool = False, log_runtime: bool = False):
+def make_linear_asynchronous(module: qLinear, log_flops: bool = False, log_runtime: bool = False):
     """Module converter from synchronous to asynchronous & sparse processing for linear layers.
     By overwriting parts of the module asynchronous processing can be enabled without the need of re-learning
     and moving its weights and configuration. So, a linear layer can be converted by, for example:

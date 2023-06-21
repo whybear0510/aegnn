@@ -22,7 +22,7 @@ from aegnn.asyncronous.base.callbacks import CallbackFactory
 import pytorch_lightning as pl
 
 from ..models.networks.my_conv import MyConv
-from ..models.networks.my_fuse import MyConvBNReLU
+from ..models.networks.my_fuse import MyConvBNReLU, qLinear
 
 
 def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=None, max_num_neighbors = 32, self_loops = False,
@@ -114,6 +114,9 @@ def make_model_asynchronous(module, r: float, grid_size=None, edge_attributes=No
         # elif isinstance(nn, torch.nn.Linear):
         #     nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
         #     # callback_keys.append(key)
+
+        elif isinstance(nn, qLinear):
+            nn_layers[key] = make_linear_asynchronous(nn, **log_kwargs)
 
         else:
             logging.debug(f"Asynchronous module for {nn_class_name} is not implemented, using dense module.")
