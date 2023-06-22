@@ -165,69 +165,69 @@ def fprint_params(async_model):
 
     fc_w = async_model.model.fc.lin.weight.T.tolist()  # shape [2, 56*32]
 
+
+
+    def fwrite_txt(f, layer, m = None, w = None, b = None):
+        f.write(f'{layer}:\n')
+        if m is not None:
+            f.write(f'm: {m}\n')
+
+        if w is not None:
+            f.write(f'w:\n')
+            for i in w:
+                for j in i:
+                    f.write(f'{int(j):6d}\t')
+                f.write('\n')
+
+        if b is not None:
+            f.write(f'b:\n')
+            for i in b:
+                f.write(f'{int(i)}')
+                f.write('\n')
+
+        f.write('\n')
+
     params_dir = '/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/params/'
     params_txt = params_dir + 'params.txt'
     with open(params_txt, 'w') as f:
         f.write(f'i_qscale_reverse: {i_qscale_reverse}\n')
         f.write(f'dpos_qscale_reverse: {dpos_qscale_reverse}\n')
 
-        f.write(f'L1:\n')
-        f.write(f'm: {L1_m}\n')
-        f.write(f'w:\n')
-        for i in L1_w:
-            for j in i:
-                f.write(f'{int(j)}\t')
-            f.write('\n')
-        f.write(f'b:\n')
-        for i in L1_b:
-            f.write(f'{int(i)}\n')
-        f.write('')
-
-
-        f.write(f'L2:\n')
-        f.write(f'm: {L2_m}\n')
-        f.write(f'w:\n')
-        for i in L2_w:
-            for j in i:
-                f.write(f'{int(j)}\t')
-            f.write('\n')
-        f.write(f'b:\n')
-        for i in L2_b:
-            f.write(f'{int(i)}\n')
-        f.write('')
-
-        f.write(f'L3:\n')
-        f.write(f'm: {L3_m}\n')
-        f.write(f'w:\n')
-        for i in L3_w:
-            for j in i:
-                f.write(f'{int(j)}\t')
-            f.write('\n')
-        f.write(f'b:\n')
-        for i in L3_b:
-            f.write(f'{int(i)}\n')
-        f.write('')
-
-        f.write(f'L4:\n')
-        f.write(f'm: {L4_m}\n')
-        f.write(f'w:\n')
-        for i in L4_w:
-            for j in i:
-                f.write(f'{int(j)}\t')
-            f.write('\n')
-        f.write(f'b:\n')
-        for i in L4_b:
-            f.write(f'{int(i)}\n')
-        f.write('')
-
-        f.write(f'fc:\n')
-        f.write(f'w:\n')
-        for i in fc_w:
-            for j in i:
-                f.write(f'{int(j)}\t')
-            f.write('\n')
+        fwrite_txt(f, 'L1', m = L1_m, w = L1_w, b = L1_b)
+        fwrite_txt(f, 'L2', m = L2_m, w = L2_w, b = L2_b)
+        fwrite_txt(f, 'L3', m = L3_m, w = L3_w, b = L3_b)
+        fwrite_txt(f, 'L4', m = L4_m, w = L4_w, b = L4_b)
+        fwrite_txt(f, 'FC', w = fc_w)
 
     tprint(f'params are recorded into {params_txt}')
+
+
+    # Note: This is little-endian storage (channelo31 channelo30 ... channelo0). Column order is reversed!
+    def fwrite_hex(params_dir, param_name, w = None, b = None):
+        if w is not None:
+            param_mem = params_dir + param_name + '_w.mem'
+            with open(param_mem, 'w') as f:
+                for i in w:
+                    for j in i[::-1]:  # Reversed column
+                        f.write('{:02x}'.format(int(j) & 0xff))  # 8bit
+                    f.write('\n')
+            tprint(f'w params (hex) are stored into {param_mem}')
+
+        if b is not None:
+            param_mem = params_dir + param_name + '_b.mem'
+            with open(param_mem, 'w') as f:
+                for i in b:
+                    f.write('{:08x}'.format(int(i) & 0xffffffff)) # 32bit
+                    f.write('\n')
+            tprint(f'b params (hex) are stored into {param_mem}')
+
+    fwrite_hex(params_dir, 'L1', w = L1_w, b = L1_b)
+    fwrite_hex(params_dir, 'L2', w = L2_w, b = L2_b)
+    fwrite_hex(params_dir, 'L3', w = L3_w, b = L3_b)
+    fwrite_hex(params_dir, 'L4', w = L4_w, b = L4_b)
+    fwrite_hex(params_dir, 'FC', w = fc_w)
+
+    tprint(f'params storing finished')
 
 
 
