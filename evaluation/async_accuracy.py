@@ -247,7 +247,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
     async_model = aegnn.asyncronous.make_model_asynchronous(model, r=args.radius, max_num_neighbors=args.max_num_neighbors, max_dt=args.max_dt)
     async_model.eval()
 
-    fprint_params(async_model)
+    # Print params into mem file for hw
+    # fprint_params(async_model)
 
     df = pd.DataFrame()
     output_file = '/users/yyang22/thesis/aegnn_project/aegnn_results/mid_result'
@@ -259,9 +260,26 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
         num_test_samples = len(data_loader)
         tprint(f"Will test all samples in the dataset")
 
+    # For hw debug:
+    debug_p = torch.tensor([[1.],[1.],[0.]], device=model.device)
+    debug_xyt = torch.tensor([[16.,16., 0.],
+                              [17.,17.,10.],
+                              [16.,16.,20.]], device=model.device)
+    debug_target = torch.tensor([1.], device=model.device)
+    debug_edge_index = torch.tensor([[0,0,1],
+                                     [1,2,2]], dtype=torch.long, device=model.device)
+    debug_sample = Data(x=debug_p, pos=debug_xyt, y=debug_target, edge_index=debug_edge_index, file_id='hw_debug', device=model.device)
+    # hw debug end
+
     max_nodes = 0
     # for NCars dataset, #events: min=500 at 1422, max=40810 at 219, mean=3920; #samples = 2462
     for i, sample in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
+
+        # For hw debug:
+        del sample
+        sample = debug_sample.clone().detach()
+        # hw debug end
+
         torch.cuda.empty_cache()
         if i==num_test_samples: break
         tprint(f"\nSample {i}, file_id {sample.file_id}:")
