@@ -15,7 +15,7 @@ from tqdm import tqdm
 tprint = tqdm.write
 from typing import Iterable, Tuple
 import aegnn
-from aegnn.asyncronous.base.utils import causal_radius_graph
+from aegnn.asyncronous.base.utils import causal_radius_graph, hugnet_graph, hugnet_graph_cylinder
 
 
 import signal
@@ -261,14 +261,15 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
         tprint(f"Will test all samples in the dataset")
 
     # For hw debug:
-    debug_p = torch.tensor([[1.],[1.],[0.]], device=model.device)
-    debug_xyt = torch.tensor([[16.,16., 0.],
-                              [17.,17.,10.],
-                              [16.,16.,20.]], device=model.device)
-    debug_target = torch.tensor([1.], device=model.device)
-    debug_edge_index = torch.tensor([[0,0,1],
-                                     [1,2,2]], dtype=torch.long, device=model.device)
-    debug_sample = Data(x=debug_p, pos=debug_xyt, y=debug_target, edge_index=debug_edge_index, file_id='hw_debug', device=model.device)
+    params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": True, "max_dt": 65535}
+    debug_num_nodes = 20
+
+    debug_p = torch.ones(debug_num_nodes).view(-1, 1)
+    debug_xyt = torch.zeros(debug_num_nodes,3)
+    debug_xyt[:,2] = torch.arange(debug_num_nodes)
+    debug_target = torch.tensor([1.])
+    debug_sample = Data(x=debug_p, pos=debug_xyt, y=debug_target, file_id='hw_debug', device='cpu')
+    debug_sample.edge_index = hugnet_graph_cylinder(debug_xyt, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"])
     # hw debug end
 
     max_nodes = 0
