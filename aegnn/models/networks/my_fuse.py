@@ -204,7 +204,7 @@ class MyConvBNReLU(MessagePassing):
                 out_conv_bn = self.propagate(edge_index, x=x, pos=pos[:, :2], size=None) + self.b_quant
                 # out_conv_bn *= self.M
                 out_conv_bn *= self.m  # m is int
-                out_conv_bn = torch.round(out_conv_bn * (2**(-self.NM)))  # pure shifting
+                out_conv_bn = torch.floor(out_conv_bn * (2**(-self.NM)))  # pure shifting, using floor() instead of round() is to be closer to real hw impl
                 out = self.act(out_conv_bn)
 
         return out
