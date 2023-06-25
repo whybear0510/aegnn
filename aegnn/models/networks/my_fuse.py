@@ -111,7 +111,7 @@ class MyConvBNReLU(MessagePassing):
         wpos_pseudo_max = wx_abs_max * x_max
         self.wpos_scale = 2 * wpos_pseudo_max / (qw_max - qw_min)
 
-        self.dpos_scale = 4.0 / (2**(f_dtype.bit+2)-1)
+        self.dpos_scale = 4.0 / (2**(f_dtype.bit+2))
 
         self.b_scale = self.x_scale * self.wx_scale
 
