@@ -308,8 +308,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
     for i, sample in enumerate(tqdm(data_loader, position=1, desc='Samples', total=num_test_samples)):
 
         # For hw debug:
-        del sample
-        sample = debug_sample.clone().detach()
+        # del sample
+        # sample = debug_sample.clone().detach()
         # hw debug end
 
         torch.cuda.empty_cache()
@@ -373,7 +373,7 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
             event_new = Data(x=x_new, pos=pos_new, batch=torch.zeros(1, dtype=torch.long))
             event_new = event_new.to(model.device)
             output_async = async_model(event_new)
-            tprint(f'out = {output_async}')
+            # tprint(f'out = {output_async}')
             y_async = torch.argmax(output_async, dim=-1)
             sub_predss.append(y_async)
             if INT: break
