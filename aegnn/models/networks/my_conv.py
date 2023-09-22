@@ -18,11 +18,11 @@ from torch_geometric.utils import add_self_loops, remove_self_loops
 
 class MyConv(MessagePassing):
 
-    def __init__(self, in_channels: int, out_channels: int, bias: bool = False, pos_dim: int = 3, add_self_loops: bool = False, **kwargs):
+    def __init__(self, in_channels: int, out_channels: int, bias: bool = False, pos_dim: int = 2, add_self_loops: bool = False, **kwargs):
         kwargs.setdefault('aggr', 'max')
         super().__init__(**kwargs)
 
-        self.local_nn = Linear(in_channels+pos_dim, out_channels, bias=True)
+        self.local_nn = Linear(in_channels+pos_dim, out_channels, bias=bias)
         self.global_nn = None
         self.add_self_loops = add_self_loops
 
@@ -60,7 +60,7 @@ class MyConv(MessagePassing):
         # if self.local_nn is not None:
         #     msg = self.local_nn(msg)
 
-        msg = pos_j - pos_i
+        msg = (pos_j[:,:2] - pos_i[:,:2]).abs()
         msg = torch.cat([x_j, msg], dim=1)
         msg = self.local_nn(msg)
 
