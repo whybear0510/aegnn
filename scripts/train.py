@@ -32,6 +32,8 @@ def parse_args():
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--cpu", action="store_true") # default is NOT using cpu
     # parser.add_argument("--gpu", default=None, type=int)
+    parser.add_argument("--test", action="store_true")
+    parser.add_argument("--test-ckpt", type=str, default=None)
 
     parser.add_argument("--init-lr", default=0.001, type=float)
     parser.add_argument("--weight-decay", default=0.0, type=float)
@@ -150,8 +152,20 @@ def main(args, seed):
 
 
     trainer = pl.Trainer.from_argparse_args(args, **trainer_kwargs)
-    trainer.tune(model, dm.train_dataloader(), dm.val_dataloader())
-    trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
+
+    if not args.test:
+        # trainer.tune(model, dm.train_dataloader(), dm.val_dataloader())
+
+        trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
+        # if want to check details about test test, use below
+        # trainer.fit(model, dm.train_dataloader(), dm.test_dataloader())
+
+        trainer.test(model, dataloaders=dm.test_dataloader())
+    else:
+        raise NotImplementedError("ckpt loader has some bugs")
+        # model = model.load_from_checkpoint(args.test_ckpt)
+        # trainer.validate(model, ckpt_path=args.test_ckpt, dataloaders=dm.val_dataloader())
+        # trainer.test(model, ckpt_path=args.test_ckpt, dataloaders=dm.test_dataloader())
 
 
 if __name__ == '__main__':

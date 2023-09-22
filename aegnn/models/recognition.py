@@ -94,19 +94,34 @@ class RecognitionModel(pl.LightningModule):
         self.log(f"Val/Accuracy_Top{k}", pl_metrics.accuracy(preds=predictions, target=batch.y, top_k=k))
         return predictions
 
+    def test_step(self, batch: torch_geometric.data.Batch, batch_idx: int) -> torch.Tensor:
+        outputs = self.forward(data=batch)
+        y_prediction = torch.argmax(outputs, dim=-1)
+        predictions = softmax(outputs, dim=-1)
+
+        loss = self.criterion(outputs, target=batch.y)
+        acc = pl_metrics.accuracy(preds=y_prediction, target=batch.y)
+        k = min(3, self.num_outputs - 1)
+        acc_k = pl_metrics.accuracy(preds=predictions, target=batch.y, top_k=k)
+
+        self.log("Test/Loss", loss)
+        self.log("Test/Accuracy", acc)
+        self.log(f"Test/Accuracy_Top{k}", acc_k)
+        return predictions
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        # lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
-        # return [optimizer], [lr_scheduler]
-        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr*1.5, epochs=100, steps_per_epoch=205, anneal_strategy='cos', div_factor=2.0, final_div_factor=5.0)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": lr_scheduler,
-                "interval": "step",
-                "frequency": 1
-            }
-        }
+        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
+        return [optimizer], [lr_scheduler]
+        # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr*1.5, epochs=100, steps_per_epoch=205, anneal_strategy='cos', div_factor=2.0, final_div_factor=5.0)
+        # return {
+        #     "optimizer": optimizer,
+        #     "lr_scheduler": {
+        #         "scheduler": lr_scheduler,
+        #         "interval": "step",
+        #         "frequency": 1
+        #     }
+        # }
 
 
 class LRPolicy(object):

@@ -18,7 +18,7 @@ from .event_ds import EventDataset
 class EventDataModule(pl.LightningDataModule):
 
     def __init__(self, img_shape: Tuple[int, int], batch_size: int, shuffle: bool, num_workers: int,
-                 pin_memory: bool, transform: Optional[Callable[[Data], Data]] = None, has_test: bool = False):
+                 pin_memory: bool, transform: Optional[Callable[[Data], Data]] = None, has_test: bool = True):
         super(EventDataModule, self).__init__(dims=img_shape)
 
         self.num_workers = num_workers
