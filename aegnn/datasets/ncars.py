@@ -19,6 +19,7 @@ class NCars(NCaltech101):
         super(NCars, self).__init__(batch_size, shuffle, num_workers, pin_memory=pin_memory, transform=transform)
         self.dims = (120, 100)  # overwrite image shape
         pre_processing_params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": True, "max_dt": 65535}
+        # pre_processing_params = {"r": 3.0, "d_max": 32, "n_samples": 10000, "sampling": True, "max_dt": 65535}
         self.save_hyperparameters({"preprocessing": pre_processing_params})
 
     def read_annotations(self, raw_file: str) -> Optional[np.ndarray]:
@@ -41,8 +42,11 @@ class NCars(NCaltech101):
     def pre_transform(self, data: Data) -> Data:
         params = self.hparams.preprocessing
 
+        torch.cuda.empty_cache()
+
         # Re-weight temporal vs. spatial dimensions to account for different resolutions.
         # data.pos[:, 2] = normalize_time(data.pos[:, 2]) # comment out = beta==1
+        data.pos[:, 2] = torch.round(data.pos[:, 2] * 1e6) # change back to unit us #! if use cylinder, uncomment this
         # data = data.to('cuda')
 
         # Coarsen graph by uniformly sampling n points from the event point cloud.
@@ -50,13 +54,13 @@ class NCars(NCaltech101):
 
         # Radius graph generation.
         # data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
-        # data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=data.pos.shape[0]) #!debug: this max nei basically equals to infinite
+        # data.edge_index = radius_graph(data.pos, r=params["r"], max_num_neighbors=data.pos.shape[0]) #this max nei basically equals to infinite
         # data.edge_index = causal_radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
         # data.edge_index = hugnet_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
 
-        torch.cuda.empty_cache()
-        data.pos[:, 2] = torch.round(data.pos[:, 2] * 1e6) # change back to unit us
-        data.edge_index = hugnet_graph_cylinder(data.pos, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"])
+        # data.edge_index = hugnet_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"], p=2)
+
+        data.edge_index = hugnet_graph_cylinder(data.pos, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"], p=1)
 
         return data
 
