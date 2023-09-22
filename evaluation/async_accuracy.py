@@ -260,48 +260,48 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
         num_test_samples = len(data_loader)
         tprint(f"Will test all samples in the dataset")
 
-    # For hw debug:
-    params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": True, "max_dt": 65535}
-    debug_num_nodes = 26
+    # # For hw debug:
+    # params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": True, "max_dt": 65535}
+    # debug_num_nodes = 26
 
-    debug_p = torch.ones(debug_num_nodes).view(-1, 1)
-    debug_xyt = torch.tensor([
-        [ 0 +10,  0 +10,   0],
+    # debug_p = torch.ones(debug_num_nodes).view(-1, 1)
+    # debug_xyt = torch.tensor([
+    #     [ 0 +10,  0 +10,   0],
 
-        [ 0 +10,  1 +10,   1],
-        [-1 +10,  0 +10,   2],
-        [ 0 +10, -1 +10,   3],
-        [ 1 +10,  0 +10,   4],
+    #     [ 0 +10,  1 +10,   1],
+    #     [-1 +10,  0 +10,   2],
+    #     [ 0 +10, -1 +10,   3],
+    #     [ 1 +10,  0 +10,   4],
 
-        [ 1 +10,  1 +10,   5],
-        [ 0 +10,  2 +10,   6],
-        [-1 +10,  1 +10,   7],
-        [-2 +10,  0 +10,   8],
-        [-1 +10, -1 +10,   9],
-        [ 0 +10, -2 +10,  10],
-        [ 1 +10, -1 +10,  11],
-        [ 2 +10,  0 +10,  12],
+    #     [ 1 +10,  1 +10,   5],
+    #     [ 0 +10,  2 +10,   6],
+    #     [-1 +10,  1 +10,   7],
+    #     [-2 +10,  0 +10,   8],
+    #     [-1 +10, -1 +10,   9],
+    #     [ 0 +10, -2 +10,  10],
+    #     [ 1 +10, -1 +10,  11],
+    #     [ 2 +10,  0 +10,  12],
 
-        [ 2 +10,  1 +10,  13],
-        [ 1 +10,  2 +10,  14],
-        [ 0 +10,  3 +10,  15],
-        [-1 +10,  2 +10,  16],
-        [-2 +10,  1 +10,  17],
-        [-3 +10,  0 +10,  18],
-        [-2 +10, -1 +10,  19],
-        [-1 +10, -2 +10,  20],
-        [ 0 +10, -3 +10,  21],
-        [ 1 +10, -2 +10,  22],
-        [ 2 +10, -1 +10,  23],
-        [ 3 +10,  0 +10,  24],
+    #     [ 2 +10,  1 +10,  13],
+    #     [ 1 +10,  2 +10,  14],
+    #     [ 0 +10,  3 +10,  15],
+    #     [-1 +10,  2 +10,  16],
+    #     [-2 +10,  1 +10,  17],
+    #     [-3 +10,  0 +10,  18],
+    #     [-2 +10, -1 +10,  19],
+    #     [-1 +10, -2 +10,  20],
+    #     [ 0 +10, -3 +10,  21],
+    #     [ 1 +10, -2 +10,  22],
+    #     [ 2 +10, -1 +10,  23],
+    #     [ 3 +10,  0 +10,  24],
 
-        [ 0 +10,  0 +10,  25]
-    ], dtype=torch.float)
+    #     [ 0 +10,  0 +10,  25]
+    # ], dtype=torch.float)
 
-    debug_target = torch.tensor([1.])
-    debug_sample = Data(x=debug_p, pos=debug_xyt, y=debug_target, file_id='hw_debug', device=model.device)
-    debug_sample.edge_index = hugnet_graph_cylinder(debug_xyt, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"])
-    # hw debug end
+    # debug_target = torch.tensor([1.])
+    # debug_sample = Data(x=debug_p, pos=debug_xyt, y=debug_target, file_id='hw_debug', device=model.device)
+    # debug_sample.edge_index = hugnet_graph_cylinder(debug_xyt, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"])
+    # # hw debug end
 
     max_nodes = 0
     # for NCars dataset, #events: min=500 at 1422, max=40810 at 219, mean=3920; #samples = 2462
@@ -428,8 +428,8 @@ def main(args, model, data_module):
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "async_accuracy")
 
-    # data_loader = data_module.val_dataloader(num_workers=16).__iter__()
-    data_loader = data_module.val_dataloader(num_workers=16)
+    # data_loader = data_module.val_dataloader(num_workers=16)
+    data_loader = data_module.test_dataloader(num_workers=16)
 
     model = calibre_quant(model, data_loader, args)
     accuracy = evaluate(model, data_loader, args=args, img_size=img_size)
