@@ -102,7 +102,7 @@ def find_new_edges_cylinder(idx_new, pos_new, pos_all, r = 3.0, max_dt = 50000, 
     return edge_new
 
 @torch.no_grad()
-def causal_radius_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int = 32, reserve_future_edges: bool = True) -> torch.LongTensor:
+def causal_radius_graph(data_pos: torch.Tensor, r: float, p: float = 1.0, max_num_neighbors: int = 32, reserve_future_edges: bool = True) -> torch.LongTensor:
     # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     torch.cuda.empty_cache()
     pos = data_pos.clone().detach()
@@ -122,7 +122,7 @@ def causal_radius_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int
 
     # calculate collection distance
     # dist_table = torch.cdist(pos, pos, p=2) # for PyTorch >= 1.13.0
-    dist_table = pos_dist(pos)
+    dist_table = pos_dist(pos, p=p)
     eps = 1e-5
     connection_mask = dist_table <= (r + eps)
     connection_mask = connection_mask.to(device)
@@ -160,7 +160,7 @@ def causal_radius_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int
 
 
 @torch.no_grad()
-def hugnet_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int = 32) -> torch.LongTensor:
+def hugnet_graph(data_pos: torch.Tensor, r: float, p: float = 1.0, max_num_neighbors: int = 32, self_loops: bool = False) -> torch.LongTensor:
     # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     torch.cuda.empty_cache()
     pos = data_pos.clone().detach()
@@ -170,7 +170,7 @@ def hugnet_graph(data_pos: torch.Tensor, r: float, max_num_neighbors: int = 32) 
     num_nodes = pos.shape[0]
 
     # calculate collection distance
-    dist_table = pos_dist(pos)
+    dist_table = pos_dist(pos, p=p)
     dist_table = dist_table.to(device)
 
     # select upper triangle of the dist table
