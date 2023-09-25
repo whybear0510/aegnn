@@ -156,9 +156,9 @@ def main(args, seed):
     if not args.test:
         # trainer.tune(model, dm.train_dataloader(), dm.val_dataloader())
 
-        trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
+        # trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
         # if want to check details about test test, use below
-        # trainer.fit(model, dm.train_dataloader(), dm.test_dataloader())
+        trainer.fit(model, dm.train_dataloader(), dm.test_dataloader())
 
         trainer.test(model, dataloaders=dm.test_dataloader())
     else:

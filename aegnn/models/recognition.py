@@ -12,7 +12,7 @@ from .networks import by_name as model_by_name
 class RecognitionModel(pl.LightningModule):
 
     def __init__(self, network, dataset: str, num_classes, img_shape: Tuple[int, int],
-                 dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, distill: bool = False, teacher_model_path: str = None, distill_t: float = 1., distill_alpha: float = 0.75, **model_kwargs):
+                 dim: int = 3, learning_rate: float = 1e-3, weight_decay: float = 5e-3, distill: bool = False, character: str = None, teacher_model_path: str = None, distill_t: float = 1., distill_alpha: float = 0.75, **model_kwargs):
         super(RecognitionModel, self).__init__()
         self.lr = learning_rate
         self.weight_decay = weight_decay
@@ -20,25 +20,30 @@ class RecognitionModel(pl.LightningModule):
         self.num_outputs = num_classes
         self.dim = dim
         self.distill = distill
+        self.character = character
 
         model_input_shape = torch.tensor(img_shape + (dim, ), device=self.device)
-        self.model = model_by_name(network)(dataset, model_input_shape, num_outputs=num_classes, distill=self.distill, **model_kwargs)
+        self.model = model_by_name(network)(dataset, model_input_shape, num_outputs=num_classes, distill=self.distill, character=self.character, **model_kwargs)
 
         if self.distill:
-            if getattr(self, 'character', None) is None:
-                self.character = 'student'
+            if self.character == 'teacher':
+                pass
+            if self.character == 'student':
                 if teacher_model_path is None:
                     raise ValueError('Distillation needs a trained teacher model path')
                 self.teacher_model = torch.load(teacher_model_path)
-                if not hasattr(self.teacher_model, 'distill'):
-                    self.teacher_model.distill = 'False'
-                    self.teacher_model.model.distill = 'False'
-                    self.teacher_model.model.character = 'teacher'
 
-            assert self.character == 'student'
-            self.distill_t = distill_t
-            self.distill_alpha = distill_alpha
-            self.distill_criterion = torch.nn.KLDivLoss()
+                if not hasattr(self.teacher_model, 'distill'):
+                    self.teacher_model.distill = True
+                    self.teacher_model.model.distill = True
+                    self.teacher_model.model.character = 'teacher'
+                    self.distill_t = distill_t
+                    self.distill_alpha = distill_alpha
+                    self.distill_criterion = torch.nn.KLDivLoss()
+
+            else:
+                raise ValueError("Assign a teacher/student character for distillation training")
+
 
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
@@ -50,8 +55,7 @@ class RecognitionModel(pl.LightningModule):
     # Steps #######################################################################################
     ###############################################################################################
     def training_step(self, batch: torch_geometric.data.Batch, batch_idx: int) -> torch.Tensor:
-        if not self.distill:
-            assert self.model.character == 'teacher'
+        if not self.distill or self.model.character == 'teacher':
             outputs = self.forward(data=batch)
             loss = self.criterion(outputs, target=batch.y)
 
@@ -60,6 +64,7 @@ class RecognitionModel(pl.LightningModule):
             self.logger.log_metrics({"Train/Loss": loss, "Train/Accuracy": accuracy}, step=self.trainer.global_step)
 
         else:
+            assert self.distill is True
             assert self.model.character == 'student'
             teacher_batch = batch.clone().detach()
 
