@@ -22,7 +22,7 @@ from aegnn.utils import Qtype
 class GraphRes(torch.nn.Module):
 
     def __init__(self, dataset, input_shape: torch.Tensor, num_outputs: int, pooling_size=(16, 12),
-                 bias: bool = False, root_weight: bool = False, act: str = 'relu', grid_div: int = 8, conv_type: str = 'fuse', distill: bool = False):
+                 bias: bool = False, root_weight: bool = False, act: str = 'relu', grid_div: int = 8, conv_type: str = 'fuse', distill: bool = False, character: str = None):
         super(GraphRes, self).__init__()
         assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
         dim = int(input_shape[-1])
@@ -46,89 +46,9 @@ class GraphRes(torch.nn.Module):
         self.conv_type = conv_type
 
         self.distill = distill
+        self.character = character
 
-        if not self.distill: # teacher model
-            self.character = 'teacher'
-
-            # Set dataset specific hyper-parameters.
-            if dataset == "ncars":
-                kernel_size = 2
-                n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
-                pooling_outputs = n[-1]
-            elif dataset == "ncaltech101" or dataset == "gen1":
-                kernel_size = 8
-                n = [1, 16, 32, 32, 32, 128, 128, 128]
-                pooling_outputs = 128
-            else:
-                raise NotImplementedError(f"No model parameters for dataset {dataset}")
-
-
-            if self.conv_type == 'spline':
-                self.conv1 = SplineConv(1, 16, dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
-                self.conv2 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
-                self.conv3 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
-                self.conv4 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
-            elif self.conv_type == 'gcn':
-                self.conv1 = GCNConv(1, 16, normalize=False, bias=False)
-                self.conv2 = GCNConv(n[4], n[5], normalize=False, bias=False)
-                self.conv3 = GCNConv(n[5], n[6], normalize=False, bias=False)
-                self.conv4 = GCNConv(n[6], n[7], normalize=False, bias=False)
-            elif self.conv_type == 'le':
-                self.edge_weight_func = Distance(cat = True)
-                self.conv1 = LEConv(1, 16, bias=False)
-                self.conv2 = LEConv(n[4], n[5], bias=False)
-                self.conv3 = LEConv(n[5], n[6], bias=False)
-                self.conv4 = LEConv(n[6], n[7], bias=False)
-            elif self.conv_type == 'pointnet':
-                self.conv1 = PointNetConv(local_nn=Linear(1+3, 16), global_nn=Linear(16, 16))
-                self.conv2 = PointNetConv(local_nn=Linear(n[4]+3, n[5]), global_nn=Linear(n[5], n[5]))
-                self.conv3 = PointNetConv(local_nn=Linear(n[5]+3, n[6]), global_nn=Linear(n[6], n[6]))
-                self.conv4 = PointNetConv(local_nn=Linear(n[6]+3, n[7]), global_nn=Linear(n[7], n[7]))
-            elif self.conv_type == 'pointnet_single':
-                self.conv1 = PointNetConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None, add_self_loops=False)
-                self.conv2 = PointNetConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None, add_self_loops=False)
-                self.conv3 = PointNetConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None, add_self_loops=False)
-                self.conv4 = PointNetConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None, add_self_loops=False)
-            elif self.conv_type == 'my':
-                self.conv1 = MyConv(1, 16)
-                self.conv2 = MyConv(n[4], n[5])
-                self.conv3 = MyConv(n[5], n[6])
-                self.conv4 = MyConv(n[6], n[7])
-
-
-            if self.conv_type != 'fuse':
-                self.norm1 = BatchNorm(in_channels=16)
-                self.norm2 = BatchNorm(in_channels=n[5])
-                self.norm3 = BatchNorm(in_channels=n[6])
-                self.norm4 = BatchNorm(in_channels=n[7])
-            elif self.conv_type == 'fuse':
-                # print('Fuse mode: conv, bn, relu')
-                self.fuse1 = MyConvBNReLU(1, 16)
-                self.fuse2 = MyConvBNReLU(n[4], n[5])
-                self.fuse3 = MyConvBNReLU(n[5], n[6])
-                self.fuse4 = MyConvBNReLU(n[6], n[7])
-            else:
-                raise ValueError(f"Unkown convolution type: {self.conv_type}")
-
-            num_grids = 8*7
-            pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
-            self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
-
-            self.hidden = 128
-            self.fc = torch.nn.Sequential(OrderedDict([
-                ('fc1', qLinear(pooling_outputs * num_grids, out_features=self.hidden*2, bias=True)),
-                ('fc_bn1', torch.nn.BatchNorm1d(num_features=self.hidden*2)),
-                ('fc_relu1', torch.nn.ReLU()),
-                ('fc2', qLinear(self.hidden*2, out_features=self.hidden, bias=True)),
-                ('fc_bn2', torch.nn.BatchNorm1d(num_features=self.hidden)),
-                ('fc_relu2', torch.nn.ReLU()),
-                ('fc3', qLinear(self.hidden, out_features=num_outputs, bias=False))
-            ]))
-            self.fc.in_features = self.fc.fc1.in_features
-
-
-        else: # student model
-            self.character = 'student'
+        if not self.distill:  # normal model
             n = [1, 16, 32, 32, 32]
             if self.conv_type == 'fuse':
                 # print('Fuse mode: conv, bn, relu')
@@ -137,7 +57,7 @@ class GraphRes(torch.nn.Module):
                 self.fuse3 = MyConvBNReLU(n[2], n[3])
                 self.fuse4 = MyConvBNReLU(n[3], n[4])
             else:
-                raise ValueError(f"Other convolution type: {self.conv_type} is not supported in student model")
+                raise ValueError(f"Other convolution type: {self.conv_type} is not supported")
 
             pooling_outputs = self.fuse4.out_channels
             # pooling_outputs = self.fuse2.out_channels
@@ -146,6 +66,107 @@ class GraphRes(torch.nn.Module):
             pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
             self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
             self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+
+        elif self.distill: # knowledge distillation
+            if self.character == 'teacher':
+                # Set dataset specific hyper-parameters.
+                if dataset == "ncars":
+                    kernel_size = 2
+                    n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
+                    pooling_outputs = n[-1]
+                elif dataset == "ncaltech101" or dataset == "gen1":
+                    kernel_size = 8
+                    n = [1, 16, 32, 32, 32, 128, 128, 128]
+                    pooling_outputs = 128
+                else:
+                    raise NotImplementedError(f"No model parameters for dataset {dataset}")
+
+
+                if self.conv_type == 'spline':
+                    self.conv1 = SplineConv(1, 16, dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+                    self.conv2 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+                    self.conv3 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+                    self.conv4 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=False, root_weight=False)
+                elif self.conv_type == 'gcn':
+                    self.conv1 = GCNConv(1, 16, normalize=False, bias=False)
+                    self.conv2 = GCNConv(n[4], n[5], normalize=False, bias=False)
+                    self.conv3 = GCNConv(n[5], n[6], normalize=False, bias=False)
+                    self.conv4 = GCNConv(n[6], n[7], normalize=False, bias=False)
+                elif self.conv_type == 'le':
+                    self.edge_weight_func = Distance(cat = True)
+                    self.conv1 = LEConv(1, 16, bias=False)
+                    self.conv2 = LEConv(n[4], n[5], bias=False)
+                    self.conv3 = LEConv(n[5], n[6], bias=False)
+                    self.conv4 = LEConv(n[6], n[7], bias=False)
+                elif self.conv_type == 'pointnet':
+                    self.conv1 = PointNetConv(local_nn=Linear(1+3, 16), global_nn=Linear(16, 16))
+                    self.conv2 = PointNetConv(local_nn=Linear(n[4]+3, n[5]), global_nn=Linear(n[5], n[5]))
+                    self.conv3 = PointNetConv(local_nn=Linear(n[5]+3, n[6]), global_nn=Linear(n[6], n[6]))
+                    self.conv4 = PointNetConv(local_nn=Linear(n[6]+3, n[7]), global_nn=Linear(n[7], n[7]))
+                elif self.conv_type == 'pointnet_single':
+                    self.conv1 = PointNetConv(local_nn=Linear(1+3, 16, bias=False), global_nn=None, add_self_loops=False)
+                    self.conv2 = PointNetConv(local_nn=Linear(n[4]+3, n[5], bias=False), global_nn=None, add_self_loops=False)
+                    self.conv3 = PointNetConv(local_nn=Linear(n[5]+3, n[6], bias=False), global_nn=None, add_self_loops=False)
+                    self.conv4 = PointNetConv(local_nn=Linear(n[6]+3, n[7], bias=False), global_nn=None, add_self_loops=False)
+                elif self.conv_type == 'my':
+                    self.conv1 = MyConv(1, 16)
+                    self.conv2 = MyConv(n[4], n[5])
+                    self.conv3 = MyConv(n[5], n[6])
+                    self.conv4 = MyConv(n[6], n[7])
+
+
+                if self.conv_type != 'fuse':
+                    self.norm1 = BatchNorm(in_channels=16)
+                    self.norm2 = BatchNorm(in_channels=n[5])
+                    self.norm3 = BatchNorm(in_channels=n[6])
+                    self.norm4 = BatchNorm(in_channels=n[7])
+                elif self.conv_type == 'fuse':
+                    # print('Fuse mode: conv, bn, relu')
+                    self.fuse1 = MyConvBNReLU(1, 16)
+                    self.fuse2 = MyConvBNReLU(n[4], n[5])
+                    self.fuse3 = MyConvBNReLU(n[5], n[6])
+                    self.fuse4 = MyConvBNReLU(n[6], n[7])
+                else:
+                    raise ValueError(f"Unkown convolution type: {self.conv_type}")
+
+                num_grids = 8*7
+                pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
+                self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
+
+                self.hidden = 128
+                self.fc = torch.nn.Sequential(OrderedDict([
+                    ('fc1', qLinear(pooling_outputs * num_grids, out_features=self.hidden*2, bias=True)),
+                    ('fc_bn1', torch.nn.BatchNorm1d(num_features=self.hidden*2)),
+                    ('fc_relu1', torch.nn.ReLU()),
+                    ('fc2', qLinear(self.hidden*2, out_features=self.hidden, bias=True)),
+                    ('fc_bn2', torch.nn.BatchNorm1d(num_features=self.hidden)),
+                    ('fc_relu2', torch.nn.ReLU()),
+                    ('fc3', qLinear(self.hidden, out_features=num_outputs, bias=False))
+                ]))
+                self.fc.in_features = self.fc.fc1.in_features
+
+
+            elif self.character == 'student':
+                n = [1, 16, 32, 32, 32]
+                if self.conv_type == 'fuse':
+                    # print('Fuse mode: conv, bn, relu')
+                    self.fuse1 = MyConvBNReLU(n[0], n[1])
+                    self.fuse2 = MyConvBNReLU(n[1], n[2])
+                    self.fuse3 = MyConvBNReLU(n[2], n[3])
+                    self.fuse4 = MyConvBNReLU(n[3], n[4])
+                else:
+                    raise ValueError(f"Other convolution type: {self.conv_type} is not supported in student model")
+
+                pooling_outputs = self.fuse4.out_channels
+                # pooling_outputs = self.fuse2.out_channels
+
+                num_grids = 8*7
+                pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
+                self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
+                self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+
+            else:
+                raise ValueError("Assign a teacher/student character for distillation training")
 
 
     def convs(self, layer, data):
