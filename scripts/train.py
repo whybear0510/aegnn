@@ -156,11 +156,15 @@ def main(args, seed):
     if not args.test:
         # trainer.tune(model, dm.train_dataloader(), dm.val_dataloader())
 
-        # trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
+        trainer.fit(model, dm.train_dataloader(), dm.val_dataloader())
         # if want to check details about test test, use below
-        trainer.fit(model, dm.train_dataloader(), dm.test_dataloader())
+        # trainer.fit(model, dm.train_dataloader(), dm.test_dataloader())
+        #! below for debug only
+        # trainer.fit(model, dm.test_dataloader(), dm.val_dataloader())
 
         trainer.test(model, dataloaders=dm.test_dataloader())
+        #! below for debug only
+        # trainer.test(model, dataloaders=dm.train_dataloader())
     else:
         raise NotImplementedError("ckpt loader has some bugs")
         # model = model.load_from_checkpoint(args.test_ckpt)
