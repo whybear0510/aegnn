@@ -10,7 +10,7 @@ from torch_scatter import scatter
 
 class MaxPoolingX(torch.nn.Module):
 
-    def __init__(self, voxel_size: Tensor, size: int, img_shape: Tensor):
+    def __init__(self, voxel_size: Tensor, size: int, img_shape: Tensor = None):
         super(MaxPoolingX, self).__init__()
         self.voxel_size = voxel_size
         self.full_shape = img_shape
@@ -28,6 +28,7 @@ class MaxPoolingX(torch.nn.Module):
         # for a single sample
         if batch is None:
             batch = torch.zeros(pos.size(0), device=pos.device, dtype=torch.long)
+        # cluster = voxel_grid(pos, batch=batch, size=self.voxel_size)
         cluster = fixed_voxel_grid(pos, full_shape=self.full_shape, size=self.voxel_size, batch=batch)
         x, _ = max_pool_x(cluster, x, batch, size=self.size)
         # x, _ = avg_pool_x(cluster, x, batch, size=self.size)

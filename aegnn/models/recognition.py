@@ -116,17 +116,17 @@ class RecognitionModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
-        return [optimizer], [lr_scheduler]
-        # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr*1.5, epochs=100, steps_per_epoch=205, anneal_strategy='cos', div_factor=2.0, final_div_factor=5.0)
-        # return {
-        #     "optimizer": optimizer,
-        #     "lr_scheduler": {
-        #         "scheduler": lr_scheduler,
-        #         "interval": "step",
-        #         "frequency": 1
-        #     }
-        # }
+        # lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=LRPolicy())
+        # return [optimizer], [lr_scheduler]
+        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr*1.5, epochs=100, steps_per_epoch=300, anneal_strategy='cos', div_factor=2.0, final_div_factor=5.0)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": lr_scheduler,
+                "interval": "step",
+                "frequency": 1
+            }
+        }
 
 
 class LRPolicy(object):

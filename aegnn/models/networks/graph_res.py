@@ -30,7 +30,7 @@ class GraphRes(torch.nn.Module):
         # TODO: more elegant way to use pl "self.device"
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.device = device
-        # self.pooling_size = torch.tensor(pooling_size, device=self.device)
+        self.pooling_size = torch.tensor(pooling_size, device=self.device)
         self.input_shape = input_shape.to(self.device)
 
         if act == 'relu':
@@ -49,23 +49,56 @@ class GraphRes(torch.nn.Module):
         self.character = character
 
         if not self.distill:  # normal model
-            n = [1, 16, 32, 32, 32]
             if self.conv_type == 'fuse':
+                n = [1, 16, 32, 32, 32]
                 # print('Fuse mode: conv, bn, relu')
                 self.fuse1 = MyConvBNReLU(n[0], n[1])
                 self.fuse2 = MyConvBNReLU(n[1], n[2])
                 self.fuse3 = MyConvBNReLU(n[2], n[3])
                 self.fuse4 = MyConvBNReLU(n[3], n[4])
+
+                pooling_outputs = self.fuse4.out_channels
+                # pooling_outputs = self.fuse2.out_channels
+                num_grids = 8*7
+                pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
+                self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
+                self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+
+
+
+            elif self.conv_type == 'ori_aegnn':
+                kernel_size = 2
+                n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
+                pooling_outputs = 32
+
+                self.conv1 = SplineConv(n[0], n[1], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm1 = BatchNorm(in_channels=n[1])
+                self.conv2 = SplineConv(n[1], n[2], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm2 = BatchNorm(in_channels=n[2])
+
+                self.conv3 = SplineConv(n[2], n[3], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm3 = BatchNorm(in_channels=n[3])
+                self.conv4 = SplineConv(n[3], n[4], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm4 = BatchNorm(in_channels=n[4])
+
+                self.conv5 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm5 = BatchNorm(in_channels=n[5])
+                self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False))
+
+                self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm6 = BatchNorm(in_channels=n[6])
+                self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
+                self.norm7 = BatchNorm(in_channels=n[7])
+
+                self.pool7 = MaxPoolingX(input_shape[:2] // 4, size=16)
+                self.fc = Linear(pooling_outputs * 16, out_features=num_outputs, bias=bias)
+
             else:
                 raise ValueError(f"Other convolution type: {self.conv_type} is not supported")
 
-            pooling_outputs = self.fuse4.out_channels
-            # pooling_outputs = self.fuse2.out_channels
 
-            num_grids = 8*7
-            pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
-            self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
-            self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+
+
 
         elif self.distill: # knowledge distillation
             if self.character == 'teacher':
@@ -200,95 +233,148 @@ class GraphRes(torch.nn.Module):
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
         # assert data.x.device.type == data.pos.device.type == data.edge_index.device.type == self.device.type
 
-        if not self.distill: # teacher model
-
-            assert self.conv_type == 'le' \
-                or self.conv_type == 'spline' \
-                or self.conv_type == 'gcn' \
-                or self.conv_type == 'pointnet' \
-                or self.conv_type == 'pointnet_single' \
-                or self.conv_type == 'my' \
-                or self.conv_type == 'fuse'
-
-
-            if self.conv_type == 'le' :
-                data = self.edge_weight_func(data)
-                data.edge_weight = data.edge_attr[:,-1]
-                data.edge_attr = data.edge_attr[:, :-1]
-
-            if self.conv_type != 'fuse':
-                data.x = self.convs(self.conv1, data)
-                data.x = self.norm1(data.x)
-                data.x = self.act(data.x)
-
-                data.x = self.norm2(self.convs(self.conv2, data))
-                data.x = self.act(data.x)
-
-                data.x = self.norm3(self.convs(self.conv3, data))
-                data.x = self.act(data.x)
-
-                data.x = self.norm4(self.convs(self.conv4, data))
-                data.x = self.act(data.x)
-
-
-            elif self.conv_type == 'fuse':
+        if not self.distill:
+            if self.conv_type == 'fuse':
                 if not self.quantized:
-                    data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index) # no timestamp
-                    data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    x_sc = data.x.clone()
-                    data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    data.x = data.x + x_sc
+                    data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index) # no timestamp
+                    data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
                 else:
-                    # data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
-                    # data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    # data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    # data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    # data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
-                    # # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
+                    data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
+                    data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
+
+                x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
+
+                if not self.quantized:
+                    output = self.fc(x)
+                else:
+                    q_output = self.fc(x)
+                    output = q_output
+
+            elif self.conv_type == 'ori_aegnn':
+                data.x = self.act(self.conv1(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm1(data.x)
+                data.x = self.act(self.conv2(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm2(data.x)
+
+                x_sc = data.x.clone()
+                data.x = self.act(self.conv3(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm3(data.x)
+                data.x = self.act(self.conv4(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm4(data.x)
+                data.x = data.x + x_sc
+
+                data.x = self.act(self.conv5(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm5(data.x)
+                data = self.pool5(data.x, pos=data.pos, batch=data.batch, edge_index=data.edge_index, return_data_obj=True)
+
+                x_sc = data.x.clone()
+                data.x = self.act(self.conv6(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm6(data.x)
+                data.x = self.act(self.conv7(data.x, data.edge_index, data.edge_attr))
+                data.x = self.norm7(data.x)
+                data.x = data.x + x_sc
+
+                x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x = x.view(-1, self.fc.in_features)
+                output = self.fc(x)
+
+        elif self.distill:
+            if self.character == 'teacher':  # teacher model
+
+                assert self.conv_type == 'le' \
+                    or self.conv_type == 'spline' \
+                    or self.conv_type == 'gcn' \
+                    or self.conv_type == 'pointnet' \
+                    or self.conv_type == 'pointnet_single' \
+                    or self.conv_type == 'my' \
+                    or self.conv_type == 'fuse'
+
+
+                if self.conv_type == 'le' :
+                    data = self.edge_weight_func(data)
+                    data.edge_weight = data.edge_attr[:,-1]
+                    data.edge_attr = data.edge_attr[:, :-1]
+
+                if self.conv_type != 'fuse':
+                    data.x = self.convs(self.conv1, data)
+                    data.x = self.norm1(data.x)
+                    data.x = self.act(data.x)
+
+                    data.x = self.norm2(self.convs(self.conv2, data))
+                    data.x = self.act(data.x)
+
+                    data.x = self.norm3(self.convs(self.conv3, data))
+                    data.x = self.act(data.x)
+
+                    data.x = self.norm4(self.convs(self.conv4, data))
+                    data.x = self.act(data.x)
+
+
+                elif self.conv_type == 'fuse':
+                    if not self.quantized:
+                        data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index) # no timestamp
+                        data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        x_sc = data.x.clone()
+                        data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        data.x = data.x + x_sc
+                    else:
+                        # data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
+                        # data.x = self.fuse1(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        # data.x = self.fuse2(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        # data.x = self.fuse3(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        # data.x = self.fuse4(x=data.x, pos=data.pos[:,:2], edge_index=data.edge_index)
+                        # # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
+                        raise ValueError('Teacher model does not support quantization')
+
+
+
+                x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
+
+                x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
+
+                if not self.quantized:
+                    output = self.fc(x)
+                else:
+                    # q_output = self.fc(x)
+                    # # dq_output = MyConvBNReLU.dequant_tensor(q_output, scale=self.fc.out_scale)
+                    # # output = dq_output
+                    # output = q_output
                     raise ValueError('Teacher model does not support quantization')
 
+            elif self.character == 'student': # student model
+                assert self.conv_type == 'fuse'
 
+                if not self.quantized:
+                    data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index) # no timestamp
+                    data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                else:
+                    data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
+                    data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                    # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
 
-            x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
 
-            x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
-
-            if not self.quantized:
-                output = self.fc(x)
-            else:
-                # q_output = self.fc(x)
-                # # dq_output = MyConvBNReLU.dequant_tensor(q_output, scale=self.fc.out_scale)
-                # # output = dq_output
-                # output = q_output
-                raise ValueError('Teacher model does not support quantization')
-
-        else: # student model
-            assert self.conv_type == 'fuse'
-
-            if not self.quantized:
-                data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index) # no timestamp
-                data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
-            else:
-                data.x = MyConvBNReLU.quant_tensor(data.x, scale=self.fuse1.x_scale, dtype=self.fuse1.f_dtype)
-                data.x = self.fuse1(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                data.x = self.fuse2(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                data.x = self.fuse3(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                data.x = self.fuse4(x=data.x, pos=data.pos, edge_index=data.edge_index)
-                # data.x = MyConvBNReLU.dequant_tensor(data.x, scale=self.fuse4.y_scale)
-
-            x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
-            x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
-
-            if not self.quantized:
-                output = self.fc(x)
-            else:
-                q_output = self.fc(x)
-                # dq_output = MyConvBNReLU.dequant_tensor(q_output, scale=self.fc.out_scale)
-                # output = dq_output
-                output = q_output
+                if not self.quantized:
+                    output = self.fc(x)
+                else:
+                    q_output = self.fc(x)
+                    # dq_output = MyConvBNReLU.dequant_tensor(q_output, scale=self.fc.out_scale)
+                    # output = dq_output
+                    output = q_output
 
         return output
 
