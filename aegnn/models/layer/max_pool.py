@@ -9,7 +9,7 @@ from .grid import fixed_voxel_grid
 
 class MaxPooling(torch.nn.Module):
 
-    def __init__(self, size: Tensor, img_shape: Tensor, transform: Callable[[Data, ], Data] = None):
+    def __init__(self, size: Tensor, img_shape: Tensor = None, transform: Callable[[Data, ], Data] = None):
         super(MaxPooling, self).__init__()
         self.voxel_size = size
         self.full_shape = img_shape
