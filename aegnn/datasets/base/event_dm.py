@@ -18,7 +18,7 @@ from .event_ds import EventDataset
 class EventDataModule(pl.LightningDataModule):
 
     def __init__(self, img_shape: Tuple[int, int], batch_size: int, shuffle: bool, num_workers: int,
-                 pin_memory: bool, transform: Optional[Callable[[Data], Data]] = None, has_test: bool = True):
+                 pin_memory: bool, transform: Optional[Callable[[Data], Data]] = None, has_test: bool = True, val_split: float = 0.15):
         super(EventDataModule, self).__init__(dims=img_shape)
 
         self.num_workers = num_workers
@@ -33,6 +33,8 @@ class EventDataModule(pl.LightningDataModule):
         self.has_test = has_test
         if self.has_test: self.test_dataset = None
 
+        self.val_split = val_split
+
     def prepare_data(self) -> None:
         logging.info("Preparing datasets for loading")
         self._prepare_dataset("training")
@@ -41,10 +43,21 @@ class EventDataModule(pl.LightningDataModule):
 
     def setup(self, stage: Optional[str] = None):
         logging.debug("Load and set up datasets")
-        self.train_dataset = self._load_dataset("training")
-        self.val_dataset = self._load_dataset("validation")
+        self.full_dataset = self._load_dataset("training")
+
+        # self.train_dataset = self._load_dataset("training")
+        # self.val_dataset = self._load_dataset("validation")
+
+        num_samples = len(self.full_dataset)
+        num_val_samples = int(self.val_split * num_samples)
+        num_train_samples = num_samples - num_val_samples
+
+        self.train_dataset, self.val_dataset = torch.utils.data.random_split(self.full_dataset, [num_train_samples, num_val_samples])
+
         if self.has_test: self.test_dataset = self._load_dataset("test")
-        if len(self.train_dataset) == 0 or len(self.val_dataset) == 0:
+
+        # if len(self.train_dataset) == 0 or len(self.val_dataset) == 0:
+        if len(self.full_dataset) == 0 or len(self.val_dataset) == 0:
             raise UserWarning("No data found, check AEGNN_DATA_DIR environment variable!")
 
     #########################################################################################################
