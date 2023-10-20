@@ -4,6 +4,10 @@ import torch
 import os
 import datetime
 
+import tqdm
+import pathlib
+import click
+
 import aegnn
 
 
@@ -29,16 +33,29 @@ if __name__ == '__main__':
             torch.multiprocessing.set_start_method("spawn")
     pl.seed_everything(args.seed)
 
-    dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
-    dm.prepare_data()
-
     experiment_name = datetime.datetime.now().strftime("%Y%m%d")
     run_name = experiment_name if args.run_name is None else args.run_name
 
-    processed_dir = os.path.join(dm.root, "processed")
-    processed_dir_with_name = processed_dir + '_' + run_name
+    dm = aegnn.datasets.by_name(args.dataset).from_argparse_args(args)
+    dm.run_name = run_name
 
-    os.rename(processed_dir, processed_dir_with_name)
-    os.symlink(processed_dir_with_name, processed_dir)
+    # Assign paths for processed datasets
+    processed_dir_with_name = pathlib.Path(dm.root) / ("processed_" + dm.run_name)
+    # Check if it exists
+    if processed_dir_with_name.exists():
+        click.confirm(f"Folder '{processed_dir_with_name.name}' already exists. Continue?", default=True, abort=True)
+
+    dm.prepare_data()
+
+    processed_dir_symlink = pathlib.Path(dm.root) / "processed"
+    # If the symlink file already exists, remove it
+    if processed_dir_symlink.exists():
+        processed_dir_symlink.unlink()
+
+    # Create the symlink
+    processed_dir_symlink.symlink_to(processed_dir_with_name)
+    print(f"Symlink created: '{processed_dir_symlink.name}' -> '{processed_dir_with_name.name}'")
+
+
 
 

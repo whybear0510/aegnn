@@ -89,7 +89,8 @@ class NCaltech101(EventDataModule):
     # Processing ############################################################################################
     #########################################################################################################
     def _prepare_dataset(self, mode: str):
-        processed_dir = os.path.join(self.root, "processed")
+        processed_with_name = "processed_" + self.run_name
+        processed_dir = os.path.join(self.root, processed_with_name)
         raw_files = self.raw_files(mode)
         class_dict = {class_id: i for i, class_id in enumerate(self.classes)}
         kwargs = dict(load_func=self.load, class_dict=class_dict, pre_transform=self.pre_transform,
@@ -98,7 +99,7 @@ class NCaltech101(EventDataModule):
 
         task_manager = TaskManager(self.num_workers, queue_size=self.num_workers)
         processed_files = []
-        for rf in tqdm(raw_files):
+        for rf in tqdm(raw_files, desc=mode):
             processed_file = rf.replace(self.root, processed_dir)
             processed_files.append(processed_file)
 
