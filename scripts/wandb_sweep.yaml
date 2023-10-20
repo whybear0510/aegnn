@@ -1,6 +1,6 @@
 program: train.py
-method: grid
-name: sweep
+method: bayes
+name: sweep_weight_decay
 command:
   - python3
   - ${program}
@@ -13,31 +13,30 @@ command:
   - "3"
   - "--conv-type"
   - "fuse"
-  - "--distill"
-  - "--teacher-model-path"
-  - "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420224023/epoch=99-step=20299.pt"
   - "--run-name"
-  - "fuse16_16_maxp"
+  - "cylinder_dmax16_dt65535"
   - ${args}
 metric:
   goal: maximize
-  name: Val/Accuracy
+  name: Test/Accuracy
 parameters:
-  max-epochs:
-    value: 100
-  min-epochs:
-    value: 35
+  # max-epochs:
+  #   value: 100
+  # min-epochs:
+  #   value: 35
   init-lr:
     value: 0.001
   batch-size:
     value: 64
   weight-decay:
-    value: 0.0
+    distribution: uniform
+    min: 0.000
+    max: 0.01
   act:
     value: "relu"
   grid-div:
     value: 8
-  distill-t:
-    values: [0.1, 0.5, 1.0, 1.5, 2.0]
-  distill-alpha:
-    values: [0.5, 0.75, 0.9, 0.95]
+  # distill-t:
+  #   values: [0.1, 0.5, 1.0, 1.5, 2.0]
+  # distill-alpha:
+  #   values: [0.5, 0.75, 0.9, 0.95]

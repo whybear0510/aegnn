@@ -104,3 +104,6 @@ CUDA_VISIBLE_DEVICES=2 python3 ../scripts/preprocessing.py --dataset ncars --num
 cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy)
 os.system(cmd)
 # os.system(cmd_train)
+
+wandb sweep -e whybear0510 -p aegnn ./wandb_sweep.yaml
+CUDA_VISIBLE_DEVICES=2 wandb agent --count 15 whybear0510/aegnn/0shgyf21
