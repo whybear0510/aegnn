@@ -76,6 +76,12 @@ CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition 
 
 CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act elu --max-num-neighbors 32 --conv-type ori_aegnn --run-name ori_aegnn
 
+CUDA_VISIBLE_DEVICES=3 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --max-num-neighbors 16 --conv-type fuse --drop 0.5 --run-name cylinder_dmax16_dt65535
+
+CUDA_VISIBLE_DEVICES=3 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.006 --act relu --max-num-neighbors 16 --conv-type fuse --drop 0.1 --run-name cylinder_dmax16_dt65535
+
+CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.006 --act relu --max-num-neighbors 16 --conv-type fuse --drop 0.1 --run-name cylinder_dmax16_car_events_balanced_wd_drop
+
 # eg: CUDA_VISIBLE_DEVICES=6 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --max-num-neighbors 16 --conv-type fuse --run-name teacher_maxd16_maxdt65535
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name teacher_fuse16_16_maxp
 # eg: CUDA_VISIBLE_DEVICES=2 python3 ../scripts/train.py graph_res --task recognition --dataset ncars --batch-size 64 --dim 3 --init-lr 0.001 --weight-decay 0.0 --act relu --conv-type fuse --run-name fuse16_16_maxp --distill --teacher-model-path /users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420224023/epoch=99-step=20299.pt --distill-t 2 --distill-alpha 0.95
@@ -106,4 +112,6 @@ os.system(cmd)
 # os.system(cmd_train)
 
 wandb sweep -e whybear0510 -p aegnn ./wandb_sweep.yaml
-CUDA_VISIBLE_DEVICES=2 wandb agent --count 15 whybear0510/aegnn/0shgyf21
+CUDA_VISIBLE_DEVICES=3 wandb agent --count 10 whybear0510/aegnn/mdvl15bt
+
+CUDA_VISIBLE_DEVICES=3 wandb agent whybear0510/aegnn/zm52d6tp

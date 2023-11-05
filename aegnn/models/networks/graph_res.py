@@ -4,12 +4,14 @@ import torch
 import torch_geometric
 
 from torch.nn import Linear
+from torch.nn import Dropout
 from torch.nn.functional import elu
 from torch.nn.functional import relu
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn.conv import SplineConv, GCNConv, LEConv, PointNetConv
 from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.transforms import Cartesian, Distance
+from torch_geometric.data import Data, Batch
 
 from aegnn.models.layer import MaxPooling, MaxPoolingX
 
@@ -18,11 +20,123 @@ from .my_fuse import MyConvBNReLU, qLinear
 
 from aegnn.utils import Qtype
 
+import random
+from torch_geometric.transforms import BaseTransform, Compose
+from abc import abstractmethod
+class BaseTransformPerSample(BaseTransform):
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def transform_per_sample(self, data: Data):
+        return data
+
+    def __call__(self, batch: Batch):
+        data_list = batch.to_data_list()
+        transformed_data_list = []
+        for data in data_list:
+            transformed_data = self.transform_per_sample(data)
+            transformed_data_list.append(transformed_data)
+        transformed_batch = Batch.from_data_list(transformed_data_list)
+        return transformed_batch
+
+
+class RandomXFlip(BaseTransform):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, data):
+        if random.random() < self.p:
+            pos = data.pos.clone()
+            max,_ = pos.max(dim=0)
+            max_x = max[0]
+            pos[:,0] = -pos[:,0] + max_x
+            data.pos = pos
+        return data
+
+
+class RandomShiftPerSample(BaseTransform):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def sample_pos_trans(self, ori_pos):
+        pos = ori_pos.clone()
+        if random.random() < self.p:
+            if pos.dim() == 1:
+                pos = pos.unsqueeze(0)
+            max,_ = pos.max(dim=0)
+            x_max, y_max = max[0], max[1]
+            dx = 119 - x_max
+            dy = 99 - y_max
+            rx = random.random()
+            ry = random.random()
+            sx = torch.floor(rx * dx)
+            sy = torch.floor(ry * dy)
+            pos[:,0] += sx
+            pos[:,1] += sy
+            pos = pos.squeeze()
+        return pos
+
+    def __call__(self, data):
+        unique_samples = torch.unique(data.batch)
+        for sample in unique_samples:
+            # find which rows belong to which samples
+            sample_indices = (data.batch == sample).nonzero().squeeze()
+
+            # extract from data pos
+            sample_pos = data.pos[sample_indices].clone()
+
+            # bigmax,_ = sample_pos.max(dim=0)
+            # x_bigmax, y_bigmax = bigmax[0], bigmax[1]
+
+            tpos = self.sample_pos_trans(sample_pos)
+            data.pos[sample_indices] = tpos
+        return data
+
+
+class RandomSubgraph(BaseTransformPerSample):
+    def __init__(self, num_samples: int, p: float = 0.5):
+        self.num_samples = num_samples
+        self.p = p
+
+    def transform_per_sample(self, data: Data):
+        if (random.random() < self.p) and (data.label[0] == 'car'):
+            real_num_samples = max(1, min(data.num_nodes, self.num_samples))  # real_num_samples = min(num_nodes, num_samples), and >= 1
+            subset = random.sample(range(data.num_nodes), real_num_samples)
+            sorted_unique_subset = torch.tensor(subset).sort().values
+            data_subgraph = data.subgraph(sorted_unique_subset).clone()
+        else:
+            data_subgraph = data
+        return data_subgraph
+
+class RandomRangeSubgraph(BaseTransformPerSample):
+    def __init__(self, range_start: int, range_end: int, p: float = 0.5):
+        self.range_start = range_start
+        self.range_end = range_end
+        self.p = p
+
+    def transform_per_sample(self, data: Data):
+        if (random.random() < self.p) \
+            and (data.label[0] == 'car') \
+            and (data.num_nodes >= self.range_start) \
+            and (data.num_nodes < self.range_end):
+
+            bias = 500  # no sample has nodes less than 500
+            scale = self.range_start - bias
+            num_samples = int(random.random() * scale) + bias  # choose a random num samples that < range_start
+            subset = random.sample(range(data.num_nodes), num_samples)
+            sorted_unique_subset = torch.tensor(subset).sort().values
+            data_subgraph = data.subgraph(sorted_unique_subset).clone()
+        else:
+            data_subgraph = data
+        return data_subgraph
+
 
 class GraphRes(torch.nn.Module):
 
     def __init__(self, dataset, input_shape: torch.Tensor, num_outputs: int, pooling_size=(16, 12),
-                 bias: bool = False, root_weight: bool = False, act: str = 'relu', grid_div: int = 8, conv_type: str = 'fuse', distill: bool = False, character: str = None):
+                 bias: bool = False, root_weight: bool = False, act: str = 'relu', grid_div: int = 8, conv_type: str = 'fuse', distill: bool = False, character: str = None, drop: float = 0.0):
         super(GraphRes, self).__init__()
         assert len(input_shape) == 3, "invalid input shape, should be (img_width, img_height, dim)"
         dim = int(input_shape[-1])
@@ -48,6 +162,15 @@ class GraphRes(torch.nn.Module):
         self.distill = distill
         self.character = character
 
+        # self.trans = RandomXFlip(p = 0.5)
+        # self.trans = torch_geometric.transforms.Compose([RandomXFlip(p = 0.5), RandomShiftPerSample(p = 0.5)])
+        self.trans = Compose([
+            RandomRangeSubgraph(range_start=1125, range_end=1375, p=0.45),
+            RandomRangeSubgraph(range_start=3250, range_end=3500, p=0.5),
+            RandomSubgraph(num_samples=500, p=0.023),
+            RandomSubgraph(num_samples=1000, p=0.012)
+        ])
+
         if not self.distill:  # normal model
             if self.conv_type == 'fuse':
                 n = [1, 16, 32, 32, 32]
@@ -63,6 +186,14 @@ class GraphRes(torch.nn.Module):
                 pooling_dm_dims = torch.tensor([16.,16.], device=self.device)
                 self.pool = MaxPoolingX(pooling_dm_dims, size=num_grids, img_shape=self.input_shape[:2])
                 self.fc = qLinear(pooling_outputs * num_grids, out_features=num_outputs, bias=False)
+                # self.fc = torch.nn.Sequential(
+                #     qLinear(pooling_outputs * num_grids, out_features=512, bias=False),
+                #     torch.nn.ReLU(),
+                #     qLinear(512, out_features=num_outputs, bias=False)
+                # )
+                # self.fc.in_features = pooling_outputs * num_grids
+
+                self.drop = Dropout(p = drop)
 
 
 
@@ -232,6 +363,11 @@ class GraphRes(torch.nn.Module):
 
     def forward(self, data: torch_geometric.data.Batch) -> torch.Tensor:
         # assert data.x.device.type == data.pos.device.type == data.edge_index.device.type == self.device.type
+        if self.training is True:
+            with torch.no_grad():
+                data = self.trans(data)
+                # pass
+
 
         if not self.distill:
             if self.conv_type == 'fuse':
@@ -250,12 +386,15 @@ class GraphRes(torch.nn.Module):
 
                 x,_ = self.pool(data.x, pos=data.pos[:, :2], batch=data.batch)
                 x = x.view(-1, self.fc.in_features) # x.shape = [batch_size, num_grids*num_last_hidden_features]
+                x = self.drop(x)
 
                 if not self.quantized:
                     output = self.fc(x)
                 else:
                     q_output = self.fc(x)
                     output = q_output
+
+                # output = self.drop(output)
 
             elif self.conv_type == 'ori_aegnn':
                 data.x = self.act(self.conv1(data.x, data.edge_index, data.edge_attr))

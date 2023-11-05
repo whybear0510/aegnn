@@ -1,6 +1,6 @@
 program: train.py
-method: bayes
-name: sweep_weight_decay
+method: random
+name: sweep_dropout_inner_weight_decay_stepLR
 command:
   - python3
   - ${program}
@@ -29,13 +29,20 @@ parameters:
   batch-size:
     value: 64
   weight-decay:
-    distribution: uniform
-    min: 0.000
-    max: 0.01
+    # distribution: uniform
+    # min: 0.000
+    # max: 0.008
+    distribution: normal
+    mu: 0.006
+    sigma: 0.0015
+    # value: 0.00
+  drop:
+    # values: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    value: 0.1
   act:
     value: "relu"
   grid-div:
-    value: 8
+    value: 4
   # distill-t:
   #   values: [0.1, 0.5, 1.0, 1.5, 2.0]
   # distill-alpha:

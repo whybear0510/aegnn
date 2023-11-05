@@ -47,6 +47,7 @@ def parse_args():
     parser.add_argument("--teacher-model-path", type=str, default=None)
     parser.add_argument("--distill-t", default=1.0, type=float)
     parser.add_argument("--distill-alpha", default=0.75, type=float)
+    parser.add_argument("--drop", default=0.5, type=float)
 
     #copy from flops.py
     parser.add_argument("--radius", default=3.0, help="radius of radius graph generation")
@@ -99,7 +100,8 @@ def main(args, seed):
         'distill': args.distill,
         'teacher_model_path': args.teacher_model_path,
         'distill_t': args.distill_t,
-        'distill_alpha': args.distill_alpha
+        'distill_alpha': args.distill_alpha,
+        'drop': args.drop
     }
 
     model = aegnn.models.by_task(args.task)(**model_args)
