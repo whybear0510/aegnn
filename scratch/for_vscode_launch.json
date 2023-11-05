@@ -1,0 +1,148 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "train AEGNN debug",
+            "justMyCode": false,
+            "type": "python",
+            "request": "launch",
+            "program": "/users/yyang22/thesis/aegnn_project/aegnn/scripts/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "graph_res",
+                "--task",
+                "recognition",
+                "--dataset",
+                "ncars",
+                "--seed",
+                "12345",
+                "--batch-size",
+                "64",
+                "--dim",
+                "3",
+                "--init-lr",
+                "0.001",
+                "--weight-decay",
+                "0.05",
+                "--act",
+                "relu",
+                // "--act",            "elu",
+                "--grid-div",
+                "8",
+                "--conv-type",
+                "fuse",
+                // "--conv-type",      "ori_aegnn",
+                "--run-name",
+                "test",
+                "--max-epochs",
+                "2",
+                "--drop",
+                "0.1"
+                // // debug mode
+                // // "--debug",
+                // // test set mode
+                // // "--test",
+                // // "--test-ckpt",
+                // // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230518004217/epoch=99-step=20199.pt",
+                // // distill
+                // "--distill",
+                // "--teacher-model-path",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230421193926/epoch=99-step=20299.pt",
+                // "--distill-t",      "2.0",
+                // // distill from teacher
+                // // "--distill-alpha",  "0.95"
+                // // only student
+                // "--distill-alpha",  "0.0"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
+        },
+        {
+            "name": "preprocessing debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/users/yyang22/thesis/aegnn_project/aegnn/scripts/preprocessing.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--dataset",
+                "ncars",
+                "--num-workers",
+                "1",
+                "--seed",
+                "12345",
+                "--run-name",
+                "test_preprocessing"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "2"
+            }
+        },
+        {
+            "name": "Python: Scratch",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            // "args": [
+            // ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3"
+            }
+        },
+        {
+            "name": "async AEGNN Debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/users/yyang22/thesis/aegnn_project/aegnn/evaluation/async_accuracy.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/latest/latest_model.pt",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20221124200553/epoch=99-step=20299.pt",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20221221153344/epoch=99-step=20299.pt",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20221221115533/epoch=99-step=20299.pt",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230113144640/epoch=99-step=20299.pt",
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230227151127/epoch=71-step=14615.pt", // spline
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230323034214/epoch=99-step=20299.pt", // spline 1_16_3
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230322155827/epoch=99-step=20299.pt", // pointnet_single 1_16_32
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230323220036/epoch=99-step=20299.pt", // my
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230324165706/epoch=59-step=12179.pt", // pointnet_single 1_16_32
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230324190947/epoch=15-step=3247.pt", // test
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230324233953/epoch=44-step=9134.pt", // my test
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230325013141/epoch=26-step=5480.pt", // gcn test
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230325040449/epoch=99-step=20299.pt", // my test no pos
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230325184130/epoch=70-step=14412.pt", // my test mean
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230327200950/epoch=99-step=20299.pt", // my bias debug
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230328183028/epoch=0-step=202.pt", // fuse
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230405180647/epoch=21-step=4465.pt", // quant test
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230408223030/epoch=99-step=20299.pt", // L1 quant test
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230409231150/epoch=99-step=20299.pt", // quant L1 qLinear
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230420175314/epoch=0-step=202.pt", // distill
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230503220257/epoch=99-step=19999.pt", // distill hugnet
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230510023907/epoch=99-step=20199.pt", // distill hugnet cylinder
+                // "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20230518004217/epoch=99-step=20199.pt", // distill hugnet cylinder dmax 16 maxdt 65535
+                "/users/yyang22/thesis/aegnn_project/aegnn_results/training_results/checkpoints/ncars/recognition/20231005143412/epoch=90-step=20474.pt", // hugnet cylinder dmax 16 maxdt 65535 ttshuffled
+                "--device",
+                "cuda",
+                "--dataset",
+                "ncars",
+                "--batch-size",
+                "1",
+                "--test-samples",
+                "100",
+                "--max-num-neighbors",
+                "16"
+                // "--conv-type", "gcn",
+                // "--fast-test"
+                // "--dataset", "ncars",
+                // "--num-workers", "1",
+                // "--gpu", "0"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3"
+            }
+        }
+    ]
+}
