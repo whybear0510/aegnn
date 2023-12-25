@@ -7,6 +7,7 @@ import torch
 import torchmetrics.functional as pl_metrics
 import torch_geometric
 import pytorch_lightning as pl
+import time as timer
 
 from torch_geometric.data import Batch
 from torch_geometric.data import Data
@@ -252,6 +253,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
 
     df = pd.DataFrame()
     output_file = '/users/yyang22/thesis/aegnn_project/aegnn_results/mid_result'
+    # df_with_time = pd.DataFrame()
+    # df_runtime = pd.DataFrame(columns=['runtime_sample', 'tot_nodes'])
 
     if args.test_samples is not None:
         num_test_samples = args.test_samples
@@ -366,6 +369,8 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
         #         if INT: break
         # tprint(f'async output = {output_new}')
 
+        # times = []
+        # runtime_start = timer.time()
         for idx in tqdm(range(tot_nodes), position=0, leave=False, desc='Events'):
             torch.cuda.empty_cache()
             x_new = sample.x[idx, :].view(1, -1)
@@ -376,7 +381,11 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
             # tprint(f'out = {output_async}')
             y_async = torch.argmax(output_async, dim=-1)
             sub_predss.append(y_async)
+            event_time = pos_new[0,2].item()
+            # times.append(event_time)
             if INT: break
+        # runtime_end = timer.time()
+        # runtime_sample = (runtime_end - runtime_start) * 1000 # runtime in ms
         tprint(f'async output = {output_async}')
 
 
@@ -388,14 +397,35 @@ def evaluate(model, data_loader, args, img_size, init_event: int = None, iter_cn
 
 
         sub_preds = torch.cat(sub_predss)
+        # time = torch.tensor(times)
 
         column_name = pd.MultiIndex.from_tuples([(i, sample.y.cpu().item())], names=['i', 'gnd_truth'])
         df.insert(len(targets)-1, column_name, pd.Series(sub_preds.cpu()), allow_duplicates=True)
         df.to_pickle(output_file+'.pkl')
         df.to_csv(output_file+'.csv')
 
+
+
+        # df_with_time[f'time_{i}'] = pd.Series(time.numpy())
+        # df_with_time[f'sub_preds_{i}'] = pd.Series(sub_preds.cpu())
+
+        # df_runtime = df_runtime.append({'runtime_sample': runtime_sample, 'tot_nodes': tot_nodes}, ignore_index=True)
+
+
         predss.append(sub_preds)
         if INT: break
+
+    # target = torch.cat(targets).unsqueeze(1)
+    # dummy_time = torch.ones_like(target) * -1
+    # header = torch.stack([dummy_time, target]).T
+    # h_flat = header.reshape(-1)
+    # df_with_time.loc[-1] = h_flat.cpu()
+    # df_with_time.sort_index(inplace=True)
+    # df_with_time.to_csv(output_file+'_with_time.csv', index=False, header=False)
+    # df_with_time.to_pickle(output_file+'_with_time.pkl')
+
+    # df_runtime.to_csv(output_file+'_runtime.csv', index=False)
+    # df_runtime.to_pickle(output_file+'_runtime.pkl')
 
 
 
