@@ -214,14 +214,68 @@ class GraphRes(torch.nn.Module):
 
                 self.conv5 = SplineConv(n[4], n[5], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
                 self.norm5 = BatchNorm(in_channels=n[5])
-                self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False))
+                # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False))
+                self.pool5 = MaxPooling(self.pooling_size, img_shape=self.input_shape[:2], transform=Cartesian(norm=True, cat=False))
 
                 self.conv6 = SplineConv(n[5], n[6], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
                 self.norm6 = BatchNorm(in_channels=n[6])
                 self.conv7 = SplineConv(n[6], n[7], dim=dim, kernel_size=kernel_size, bias=bias, root_weight=root_weight)
                 self.norm7 = BatchNorm(in_channels=n[7])
 
-                self.pool7 = MaxPoolingX(input_shape[:2] // 4, size=16)
+                # self.pool7 = MaxPoolingX(input_shape[:2] // 4, size=16)
+                pooling_dm_dims = torch.tensor([30.,25.], device=self.device)
+                self.pool7 = MaxPoolingX(pooling_dm_dims, size=16, img_shape=self.input_shape[:2])
+                self.fc = Linear(pooling_outputs * 16, out_features=num_outputs, bias=bias)
+
+            elif self.conv_type == 'gcn':
+                n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
+                pooling_outputs = 32
+
+                self.conv1 = GCNConv(n[0], n[1])
+                self.norm1 = BatchNorm(in_channels=n[1])
+                self.conv2 = GCNConv(n[1], n[2])
+                self.norm2 = BatchNorm(in_channels=n[2])
+
+                self.conv3 = GCNConv(n[2], n[3])
+                self.norm3 = BatchNorm(in_channels=n[3])
+                self.conv4 = GCNConv(n[3], n[4])
+                self.norm4 = BatchNorm(in_channels=n[4])
+
+                self.conv5 = GCNConv(n[4], n[5])
+                self.norm5 = BatchNorm(in_channels=n[5])
+                # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False))
+                self.pool5 = MaxPooling(self.pooling_size, img_shape=self.input_shape[:2], transform=Cartesian(norm=True, cat=False))
+
+                self.conv6 = GCNConv(n[5], n[6])
+                self.norm6 = BatchNorm(in_channels=n[6])
+                self.conv7 = GCNConv(n[6], n[7])
+                self.norm7 = BatchNorm(in_channels=n[7])
+
+                # self.pool7 = MaxPoolingX(input_shape[:2] // 4, size=16)
+                pooling_dm_dims = torch.tensor([30.,25.], device=self.device)
+                self.pool7 = MaxPoolingX(pooling_dm_dims, size=16, img_shape=self.input_shape[:2])
+                self.fc = Linear(pooling_outputs * 16, out_features=num_outputs, bias=bias)
+
+            elif self.conv_type == 'simple_pointnet':
+                n = [1, 8, 16, 16, 16, 32, 32, 32, 32]
+                pooling_outputs = 32
+
+                self.conv1 = MyConvBNReLU(n[0], n[1])
+                self.conv2 = MyConvBNReLU(n[1], n[2])
+
+                self.conv3 = MyConvBNReLU(n[2], n[3])
+                self.conv4 = MyConvBNReLU(n[3], n[4])
+
+                self.conv5 = MyConvBNReLU(n[4], n[5])
+                # self.pool5 = MaxPooling(self.pooling_size, transform=Cartesian(norm=True, cat=False))
+                self.pool5 = MaxPooling(self.pooling_size, img_shape=self.input_shape[:2], transform=Cartesian(norm=True, cat=False))
+
+                self.conv6 = MyConvBNReLU(n[5], n[6])
+                self.conv7 = MyConvBNReLU(n[6], n[7])
+
+                # self.pool7 = MaxPoolingX(input_shape[:2] // 4, size=16)
+                pooling_dm_dims = torch.tensor([30.,25.], device=self.device)
+                self.pool7 = MaxPoolingX(pooling_dm_dims, size=16, img_shape=self.input_shape[:2])
                 self.fc = Linear(pooling_outputs * 16, out_features=num_outputs, bias=bias)
 
             else:
@@ -397,6 +451,8 @@ class GraphRes(torch.nn.Module):
                 # output = self.drop(output)
 
             elif self.conv_type == 'ori_aegnn':
+                data.edge_attr[:,2] = 0.5  # if cylinder + aegnn struct, use it
+                # Reason: original AEGNN shrink timestamp too much, so the dt around 1e-7. After Cartesian, each one will +0.5. So it is close to 0.5 constant
                 data.x = self.act(self.conv1(data.x, data.edge_index, data.edge_attr))
                 data.x = self.norm1(data.x)
                 data.x = self.act(self.conv2(data.x, data.edge_index, data.edge_attr))
@@ -412,12 +468,62 @@ class GraphRes(torch.nn.Module):
                 data.x = self.act(self.conv5(data.x, data.edge_index, data.edge_attr))
                 data.x = self.norm5(data.x)
                 data = self.pool5(data.x, pos=data.pos, batch=data.batch, edge_index=data.edge_index, return_data_obj=True)
+                data.edge_attr[:,2] = 0.5  # if cylinder + aegnn struct, use it
 
                 x_sc = data.x.clone()
                 data.x = self.act(self.conv6(data.x, data.edge_index, data.edge_attr))
                 data.x = self.norm6(data.x)
                 data.x = self.act(self.conv7(data.x, data.edge_index, data.edge_attr))
                 data.x = self.norm7(data.x)
+                data.x = data.x + x_sc
+
+                x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x = x.view(-1, self.fc.in_features)
+                output = self.fc(x)
+
+            elif self.conv_type == 'gcn':
+                data.x = self.act(self.conv1(data.x, data.edge_index))
+                data.x = self.norm1(data.x)
+                data.x = self.act(self.conv2(data.x, data.edge_index))
+                data.x = self.norm2(data.x)
+
+                x_sc = data.x.clone()
+                data.x = self.act(self.conv3(data.x, data.edge_index))
+                data.x = self.norm3(data.x)
+                data.x = self.act(self.conv4(data.x, data.edge_index))
+                data.x = self.norm4(data.x)
+                data.x = data.x + x_sc
+
+                data.x = self.act(self.conv5(data.x, data.edge_index))
+                data.x = self.norm5(data.x)
+                data = self.pool5(data.x, pos=data.pos, batch=data.batch, edge_index=data.edge_index, return_data_obj=True)
+
+                x_sc = data.x.clone()
+                data.x = self.act(self.conv6(data.x, data.edge_index))
+                data.x = self.norm6(data.x)
+                data.x = self.act(self.conv7(data.x, data.edge_index))
+                data.x = self.norm7(data.x)
+                data.x = data.x + x_sc
+
+                x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
+                x = x.view(-1, self.fc.in_features)
+                output = self.fc(x)
+
+            elif self.conv_type == 'simple_pointnet':
+                data.x = self.conv1(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.conv2(x=data.x, pos=data.pos, edge_index=data.edge_index)
+
+                x_sc = data.x.clone()
+                data.x = self.conv3(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.conv4(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = data.x + x_sc
+
+                data.x = self.conv5(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data = self.pool5(data.x, pos=data.pos, batch=data.batch, edge_index=data.edge_index, return_data_obj=True)
+
+                x_sc = data.x.clone()
+                data.x = self.conv6(x=data.x, pos=data.pos, edge_index=data.edge_index)
+                data.x = self.conv7(x=data.x, pos=data.pos, edge_index=data.edge_index)
                 data.x = data.x + x_sc
 
                 x,_ = self.pool7(data.x, pos=data.pos[:, :2], batch=data.batch)
