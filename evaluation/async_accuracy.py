@@ -458,8 +458,8 @@ def main(args, model, data_module):
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "async_accuracy")
 
-    # data_loader = data_module.val_dataloader(num_workers=16)
-    data_loader = data_module.test_dataloader(num_workers=16)
+    data_loader = data_module.val_dataloader(num_workers=16)
+    # data_loader = data_module.test_dataloader(num_workers=16)
 
     model = calibre_quant(model, data_loader, args)
     accuracy = evaluate(model, data_loader, args=args, img_size=img_size)
