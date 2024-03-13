@@ -111,7 +111,7 @@ cmd = cat_cmd(cmd_train, cmd_cpresult, cmd_accuracy)
 os.system(cmd)
 # os.system(cmd_train)
 
-wandb sweep -e whybear0510 -p aegnn ./wandb_sweep.yaml
+wandb sweep -e whybear0510 -p aegnn ./wandb_sweep_experiments.yaml
 CUDA_VISIBLE_DEVICES=3 wandb agent --count 10 whybear0510/aegnn/mdvl15bt
 
-CUDA_VISIBLE_DEVICES=3 wandb agent whybear0510/aegnn/zm52d6tp
+CUDA_VISIBLE_DEVICES=2 wandb agent whybear0510/aegnn/tfyi5uh0
