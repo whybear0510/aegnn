@@ -18,8 +18,8 @@ class NCars(NCaltech101):
                  transform: Optional[Callable[[Data], Data]] = None):
         super(NCars, self).__init__(batch_size, shuffle, num_workers, pin_memory=pin_memory, transform=transform)
         self.dims = (120, 100)  # overwrite image shape
-        pre_processing_params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": False, "max_dt": 65535}
-        # pre_processing_params = {"r": 3.0, "d_max": 32, "n_samples": 10000, "sampling": True, "max_dt": 65535}
+        # pre_processing_params = {"r": 3.0, "d_max": 16, "n_samples": 10000, "sampling": False, "max_dt": 65535}
+        pre_processing_params = {"r": 3.0, "d_max": 32, "n_samples": 10000, "sampling": True, "max_dt": 65535}
         self.save_hyperparameters({"preprocessing": pre_processing_params})
 
     def read_annotations(self, raw_file: str) -> Optional[np.ndarray]:
@@ -58,7 +58,7 @@ class NCars(NCaltech101):
         # data.edge_index = causal_radius_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
         # data.edge_index = hugnet_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"])
 
-        # data.edge_index = hugnet_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"], p=2)
+        # data.edge_index = hugnet_graph(data.pos, r=params["r"], max_num_neighbors=params["d_max"], p=1)
 
         data.edge_index = hugnet_graph_cylinder(data.pos, r=params["r"], max_num_neighbors=params["d_max"], max_dt=params["max_dt"], p=1)
 
